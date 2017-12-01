@@ -372,7 +372,9 @@ class ConfigWizard(ConversationHandler):
         user_id = update.message.from_user.id
         reply_password = update.message.text
         user = self.db_manager.get_user(user_id)
-        self.scheduler.update_user_library(user, password=reply_password)
+        if not user.now_caching:
+            self.scheduler.update_user_library(user, password=reply_password)
+            
         self.request_library(
             update, user, concat_message='updating_library'
         )

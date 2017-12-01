@@ -107,26 +107,27 @@ class CronJobManager:
     @staticmethod
     def thumbnail(db_object, db_manager, parent=None):
         db_manager.flush()
-        if parent:
-            thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
-                CronJobManager.download_path, 
-                parent.title,
-                parent.id, 
-                db_object.title,
-                db_object.id
+        if db_object.id:
+            if parent:
+                thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
+                    CronJobManager.download_path, 
+                    parent.title,
+                    parent.id, 
+                    db_object.title,
+                    db_object.id
+                )
+            else:
+                thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
+                    CronJobManager.download_path, db_object.title, db_object.id
             )
-        else:
-            thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
-                CronJobManager.download_path, db_object.title, db_object.id
-        )
-        if not utils.dir_exists(thumbnail_path):
-            utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
-            dmm.download_image(db_object.thumbnail, thumbnail_path)
-            db_object.thumbnail = thumbnail_path
-            try:
-                db_manager.commit()
-            except Exception as e:
-                db_manager.rollback()
+            if not utils.dir_exists(thumbnail_path):
+                utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
+                dmm.download_image(db_object.thumbnail, thumbnail_path)
+                db_object.thumbnail = thumbnail_path
+                try:
+                    db_manager.commit()
+                except Exception as e:
+                    db_manager.rollback()
 
     @staticmethod
     def cache_user_library(user, session=None, password=None, fast=False):
