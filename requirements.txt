@@ -1,0 +1,6 @@
+APScheduler
+beautifulsoup4
+python-telegram-bot
+requests
+selenium
+SQLAlchemy
