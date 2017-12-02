@@ -15,9 +15,11 @@ class CronJobManager:
     
     __instance = None
     time_zone = pytz.timezone('Asia/Tokyo')
-    start_hour = 3
-    start_min = 0
+    start_hour = 4
+    start_min = 51
     download_path = utils.get_abs_path('./downloads')
+
+    jobs = {}
 
     def __init__(self):
 
@@ -26,7 +28,6 @@ class CronJobManager:
         else:
             self.update_cron_start_time()
             self.db_manager = Database.get_instance()
-            self.jobs = {}
 
             jobstores = {
                 # 'alchemy': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite'),
@@ -72,13 +73,10 @@ class CronJobManager:
             kwargs={'session': session, 'password': password}
         )
 
-    def remove_scheduled_user_cache(self, user_id):
-        if user_id in self.jobs:
-            self.jobs[user_id].remove()
-            del self.jobs[user_id]
-
     def schedule_user_cache(self, user):
         self.remove_scheduled_user_cache(user.id)
+
+        print(self.update_cron_start_time())
 
         job = self.scheduler.add_job(
             self.cache_user_library,
@@ -87,11 +85,17 @@ class CronJobManager:
             days=1,
             start_date=self.update_cron_start_time()
         )
-        self.jobs[user.id] = job
+        CronJobManager.jobs[user.id] = job
 
     def add_user_cache_scheduler(self, user, session=None):
         self.update_user_library(user, session)
         self.schedule_user_cache(user)
+
+    @staticmethod
+    def remove_scheduled_user_cache(user_id):
+        if user_id in CronJobManager.jobs:
+            CronJobManager.jobs[user_id].remove()
+            del CronJobManager.jobs[user_id]
 
     @staticmethod
     def get_cache_expire_date():
@@ -176,11 +180,15 @@ class CronJobManager:
             db_manager.set_user_cache_expire_date(
                 user.id, CronJobManager.get_cache_expire_date()
             )
+            db_manager.set_user_cache_built(user.id, True)
+
+            db_manager.set_user_login_error(user.id, False)
         except Exception as e:
-            print(e)
-        print('{} user\'s cache ended'.format(user.id))
-        db_manager.set_user_now_caching(user.id, False)
-        db_manager.set_user_cache_built(user.id, True)
+            db_manager.set_user_login_error(user.id, True)
+            CronJobManager.remove_scheduled_user_cache(user.id)
+        finally:
+            print('{} user\'s cache ended'.format(user.id))
+            db_manager.set_user_now_caching(user.id, False)
 
     @staticmethod
     def get_instance():
@@ -190,11 +198,12 @@ class CronJobManager:
             for user in CronJobManager.__instance.db_manager \
                 .get_credentialed_users():
                 
-                if user.cache_expire_date <= datetime.now():
-                    print('execute last unprocessed job.')
-                    CronJobManager.__instance.update_user_library(user)
+                if user.cache_scheduling:
+                    if user.cache_expire_date <= datetime.now():
+                        print('execute last unprocessed job.')
+                        CronJobManager.__instance.update_user_library(user)
 
-                CronJobManager.__instance.schedule_user_cache(user)
+                    CronJobManager.__instance.schedule_user_cache(user)
 
         return CronJobManager.__instance 
 

@@ -268,7 +268,8 @@ class ConfigWizard(ConversationHandler):
 
         if utils.is_valid_email(reply_email):
             self.db_manager.set_user_email(user_id, reply_email)
-            self.scheduler.schedule_user_cache(user)
+            if user.save_credentials:
+                self.scheduler.schedule_user_cache(user)
             self.request_account(update, user, concat_message='email_changed')
             return self.PROCESS_ACCOUNT
         else:    
@@ -279,7 +280,6 @@ class ConfigWizard(ConversationHandler):
         user_id = update.message.from_user.id
         reply_password = update.message.text
         user = self.db_manager.get_user(user_id)
-
         self.db_manager.set_user_password(user_id, reply_password)
         self.scheduler.schedule_user_cache(user)
         self.request_account(update, user, concat_message='password_changed')
@@ -374,7 +374,7 @@ class ConfigWizard(ConversationHandler):
         user = self.db_manager.get_user(user_id)
         if not user.now_caching:
             self.scheduler.update_user_library(user, password=reply_password)
-            
+
         self.request_library(
             update, user, concat_message='updating_library'
         )

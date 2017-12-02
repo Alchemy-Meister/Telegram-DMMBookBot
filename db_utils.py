@@ -35,14 +35,14 @@ class User(Base):
     save_credentials = Column(Boolean(create_constraint=False))
     file_format = Column(Enum(FileFormat), default=FileFormat.pdf)
     cache_expire_date = Column(
-        TIMESTAMP(timezone=False),
-        default=datetime.now()
+        TIMESTAMP(timezone=False), default=datetime.now()
     )
     now_caching = Column(Boolean(create_constraint=False), default=False)
     cache_built = Column(Boolean(create_constraint=False), default=False)
-    book_collection = relationship('Manga',
-                    secondary=user_manga_table,
-                    backref='owners', lazy='dynamic')
+    login_error = Column(Boolean(create_constraint=False), default=False)
+    book_collection = relationship(
+        'Manga', secondary=user_manga_table, backref='owners', lazy='dynamic'
+    )
 
 class MangaSeries(Base):
     __tablename__ = 'manga_serie'
@@ -176,6 +176,11 @@ class Database():
     def set_user_cache_built(self, user_id, cache_built):
         self.session.query(User).filter_by(id=user_id) \
             .update({'cache_built': cache_built})
+        self.session.commit()
+
+    def set_user_login_error(self, user_id, login_error):
+        self.session.query(User).filter_by(id=user_id) \
+            .update({'login_error': login_error})
         self.session.commit()
 
     def commit(self):

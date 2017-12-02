@@ -1,15 +1,19 @@
 from telegram.ext import (ConversationHandler, CommandHandler, RegexHandler)
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
+from datetime import timedelta
+
 from cron_job_manager import CronJobManager
 from db_utils import Database
 import dmm_ripper as dmm
 import utilities as utils
 import json
+import pytz
 
 class ListBookHandler(ConversationHandler):
 
     num_stages = 1
+    time_zone = pytz.timezone('Asia/Tokyo')
 
     def __init__(self, lang, language_codes, initial_stage):
         self.db_manager = Database.get_instance()
@@ -50,16 +54,40 @@ class ListBookHandler(ConversationHandler):
         language_code = user.language_code
 
         if user.cache_built:
+            if user.login_error:
+                if user.language_code == 'ja':
+                    date = user.cache_expire_date.replace(tzinfo=self.time_zone)
+                    date = (date - timedelta(days=1)).strftime('%Y/%m/%d')
+                else:
+                    date = user.cache_expire_date.replace(tzinfo=None)
+                    date = (date - timedelta(days=1)).strftime('%Y/%d/%m')
+
+                message = '{}\n\n{}'.format(
+                    self.lang[language_code]['update_library_error'],
+                    self.lang[language_code]['last_library_request'] \
+                        .format(date)
+                )
+            else:
+                message = self.lang[language_code]['library_request']
+            
             button_library = [InlineKeyboardButton(x.title, \
                 callback_data=x.url) \
                 for x in self.db_manager.get_user_library(user_id)]
 
-            self.inline_keyboard_request(update, language_code, \
-                'library_request', utils.build_menu(button_library))
+            reply_markup = InlineKeyboardMarkup(
+                utils.build_menu(button_library)
+            )
+            update.message.reply_text(message, reply_markup=reply_markup)
         elif user.now_caching:
             self.send_message(update, language_code, ['building_cache'])
         else:
-            self.send_message(update, language_code, ['request_update_library'])
+            if user.login_error: 
+                message = 'build_library_error'
+            else:
+                message = 'request_update_library'
+            self.send_message(
+                    update, language_code, [message]
+                )
 
         return ConversationHandler.END
 
