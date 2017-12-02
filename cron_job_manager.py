@@ -198,7 +198,7 @@ class CronJobManager:
             for user in CronJobManager.__instance.db_manager \
                 .get_credentialed_users():
                 
-                if user.cache_scheduling:
+                if not user.login_error:
                     if user.cache_expire_date <= datetime.now():
                         print('execute last unprocessed job.')
                         CronJobManager.__instance.update_user_library(user)

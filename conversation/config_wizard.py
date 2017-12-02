@@ -171,7 +171,7 @@ class ConfigWizard(ConversationHandler):
             )
             return self.CONFIG
         
-    def request_account(self, update, user, concat_message=None):
+    def request_account(self, update, user, concat_messages=None):
         language_code = user.language_code
 
         buttons = [
@@ -183,9 +183,12 @@ class ConfigWizard(ConversationHandler):
         if user.save_credentials == True:
             buttons[1:1] = [[self.lang[language_code]['password']]]
 
-        if concat_message != None:
+        if concat_messages != None:
+            concat_message = self.lang[language_code][concat_messages.pop(0)]
+            for m in concat_messages:
+                concat_message += ' ' + self.lang[language_code][m] 
             message = '{}\n\n{}'.format(
-                self.lang[language_code][concat_message], 
+                concat_message, 
                 self.lang[language_code]['config_menu_request']
             )
         else:
@@ -270,7 +273,9 @@ class ConfigWizard(ConversationHandler):
             self.db_manager.set_user_email(user_id, reply_email)
             if user.save_credentials:
                 self.scheduler.schedule_user_cache(user)
-            self.request_account(update, user, concat_message='email_changed')
+            self.request_account(
+                update, user, concat_messages=['email_changed']
+            )
             return self.PROCESS_ACCOUNT
         else:    
             self.send_message(update, language_code, ['invalid_email'])
@@ -282,7 +287,7 @@ class ConfigWizard(ConversationHandler):
         user = self.db_manager.get_user(user_id)
         self.db_manager.set_user_password(user_id, reply_password)
         self.scheduler.schedule_user_cache(user)
-        self.request_account(update, user, concat_message='password_changed')
+        self.request_account(update, user, concat_messages=['password_changed'])
         return self.PROCESS_ACCOUNT
 
     def process_save_credentials(self, bot, update):
@@ -305,18 +310,22 @@ class ConfigWizard(ConversationHandler):
                 self.request_account(
                     update,
                     user,
-                    concat_message='credentials_enabled'
+                    concat_messages=['credentials_enabled']
                 )
                 return self.PROCESS_ACCOUNT
 
         else:
-            self.scheduler.remove_scheduled_user_cache(user_id)
+            if user.save_credentials:
+                self.scheduler.remove_scheduled_user_cache(user_id)
+                self.db_manager.set_user_password(user_id, None)
+                messages = ['credentials_disabled', 'password_removed']
+            else:
+                messages = ['credentials_disabled']
             self.db_manager.set_save_credentials(user_id, False)
-            self.db_manager.set_user_password(user_id, None)
             self.request_account(
                 update,
                 user,
-                concat_message='credentials_disabled'
+                concat_messages=messages
             )
             return self.PROCESS_ACCOUNT
 
