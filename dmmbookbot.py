@@ -6,26 +6,22 @@ from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
     InlineKeyboardButton, InlineKeyboardMarkup)
 from telegram.ext import (Updater, CommandHandler, MessageHandler, 
     CallbackQueryHandler)
-
 from conversation import StartWizard, ConfigWizard, ListBookHandler
-
 from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
-
 from datetime import datetime
 from pytz import timezone, utc
-
 import config
 import logging
 import json
 import utilities as utils
 
 def logging_tz(*args):
-        utc_dt = utc.localize(datetime.utcnow())
-        my_tz = timezone('Asia/Tokyo')
-        converted = utc_dt.astimezone(my_tz)
-        return converted.timetuple()
+    utc_dt = utc.localize(datetime.utcnow())
+    my_tz = timezone('Asia/Tokyo')
+    converted = utc_dt.astimezone(my_tz)
+    return converted.timetuple()
 
 # Enable logging
 logging.basicConfig(

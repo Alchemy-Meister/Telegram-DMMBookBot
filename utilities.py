@@ -56,6 +56,3 @@ def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
     if footer_buttons:
         menu.append(footer_buttons)
     return menu
-
-def cache_user_library(user):
-    print('DONE!!')
