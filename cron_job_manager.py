@@ -146,7 +146,7 @@ class CronJobManager:
                     password = user.password
                 session = dmm.get_session(user.email, password, fast)
             books = dmm.get_purchased_books(session)
-
+            db_session.add(user)
             for book in books:
                 if book['series']:
                     serie = db_manager.get_manga_serie(db_session, book['url'])
@@ -156,7 +156,6 @@ class CronJobManager:
 
                     volumes = dmm.get_book_volumes(session, book)
                     for volume in volumes:
-                        print(volume['url'])
                         db_volume = Manga(
                             title=volume['name'],
                             url=volume['url'],
@@ -170,6 +169,7 @@ class CronJobManager:
                                 db_volume, db_manager, parent=serie
                             )
                         except Exception as e:
+                            print(e)
                             db_manager.rollback(db_session)
                     CronJobManager.thumbnail(db_session, serie, db_manager)
                 else:
