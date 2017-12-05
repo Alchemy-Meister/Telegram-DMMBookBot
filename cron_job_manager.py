@@ -109,8 +109,8 @@ class CronJobManager:
         return cache_expire_date.replace(tzinfo=None)
 
     @staticmethod
-    def thumbnail(db_object, db_manager, parent=None):
-        db_manager.flush()
+    def thumbnail(session, db_object, db_manager, parent=None):
+        db_manager.flush(session)
         if db_object.id:
             if parent:
                 thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
@@ -129,14 +129,15 @@ class CronJobManager:
                 dmm.download_image(db_object.thumbnail, thumbnail_path)
                 db_object.thumbnail = thumbnail_path
                 try:
-                    db_manager.commit()
+                    db_manager.commit(session)
                 except Exception as e:
-                    db_manager.rollback()
+                    db_manager.rollback(session)
 
     @staticmethod
     def cache_user_library(user, session=None, password=None, fast=False):
         db_manager = Database.get_instance()
-        db_manager.set_user_now_caching(user.id, True)
+        db_session = db_manager.create_session()
+        db_manager.set_user_now_caching(db_session, user.id, True)
         print('{} user\'s cache running'.format(user.id))
 
         try:
@@ -148,11 +149,14 @@ class CronJobManager:
 
             for book in books:
                 if book['series']:
-                    serie = MangaSeries(title=book['name'], url=book['url'], 
-                        thumbnail=book['thumbnail'])
+                    serie = db_manager.get_manga_serie(db_session, book['url'])
+                    if not serie:
+                        serie = MangaSeries(title=book['name'], url=book['url'], 
+                            thumbnail=book['thumbnail'])
 
                     volumes = dmm.get_book_volumes(session, book)
                     for volume in volumes:
+                        print(volume['url'])
                         db_volume = Manga(
                             title=volume['name'],
                             url=volume['url'],
@@ -161,42 +165,45 @@ class CronJobManager:
                         )
                         try:
                             user.book_collection.append(db_volume)
-                            db_manager.commit()
-                            CronJobManager.thumbnail(
+                            db_manager.commit(db_session)
+                            CronJobManager.thumbnail(db_session,
                                 db_volume, db_manager, parent=serie
                             )
                         except Exception as e:
-                            db_manager.rollback()
-
-                    CronJobManager.thumbnail(serie, db_manager)
+                            db_manager.rollback(db_session)
+                    CronJobManager.thumbnail(db_session, serie, db_manager)
                 else:
                     book = Manga(title=book['name'], url=book['url'])
                     try:
                         user.book_collection.append(book)
-                        db_manager.commit()
+                        db_manager.commit(session)
                     except:
-                        db_manager.rollback()
+                        print(e)
+                        db_manager.rollback(session)
+
 
             db_manager.set_user_cache_expire_date(
-                user.id, CronJobManager.get_cache_expire_date()
+                db_session, user.id, CronJobManager.get_cache_expire_date()
             )
-            db_manager.set_user_cache_built(user.id, True)
+            db_manager.set_user_cache_built(db_session, user.id, True)
 
-            db_manager.set_user_login_error(user.id, False)
+            db_manager.set_user_login_error(db_session, user.id, False)
         except Exception as e:
-            db_manager.set_user_login_error(user.id, True)
+            print(e)
+            db_manager.set_user_login_error(db_session, user.id, True)
             CronJobManager.remove_scheduled_user_cache(user.id)
         finally:
             print('{} user\'s cache ended'.format(user.id))
-            db_manager.set_user_now_caching(user.id, False)
+            db_manager.set_user_now_caching(db_session, user.id, False)
+            db_manager.remove_session()
 
     @staticmethod
     def get_instance():
         if CronJobManager.__instance == None:
             CronJobManager()
-
+            session = CronJobManager.__instance.db_manager.create_session()
             for user in CronJobManager.__instance.db_manager \
-                .get_credentialed_users():
+                .get_credentialed_users(session):
                 
                 if not user.login_error:
                     if user.cache_expire_date <= datetime.now():
@@ -204,6 +211,7 @@ class CronJobManager:
                         CronJobManager.__instance.update_user_library(user)
 
                     CronJobManager.__instance.schedule_user_cache(user)
+            CronJobManager.__instance.db_manager.remove_session()
 
         return CronJobManager.__instance 
 

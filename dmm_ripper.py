@@ -2,15 +2,12 @@
 # -*-coding:utf-8 -*-
 
 from bs4 import BeautifulSoup
-
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
-
 import re
 import requests
 import sys
-
 import utilities
 
 debug = False
@@ -73,7 +70,7 @@ def get_session(email, password, fast=False):
 
     return session
 
-def get_books(html):
+def get_books_list(html, is_volume_list):
     books = []
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -84,20 +81,22 @@ def get_books(html):
         'm-boxListBookProductBlock__wrap'})
 
     for book_div in book_divs:
+        try:
+            book_link = book_div.findChild(attrs={'class': \
+                'm-boxListBookProductBlock__item'}).findChild()['href']
 
-        title = book_div.findChild(attrs={'class': \
-            'm-boxListBookProductBlock__main__info__ttl'}).findChild() \
-            .contents[0]
+            title = book_div.findChild(attrs={'class': \
+                'm-boxListBookProductBlock__main__info__ttl'}).findChild() \
+                .contents[0]
 
-        book_link = book_div.findChild(attrs={'class': \
-            'm-boxListBookProductBlock__item'}).findChild()['href']
+            url = book_url + book_link
 
-        url = book_url + book_link
+            thumbnail = book_div.findChild(attrs={'class': \
+                'm-boxListBookProductBlock__main__tmb'}).findChild('img')['src']
 
-        thumbnail = book_div.findChild(attrs={'class': \
-            'm-boxListBookProductBlock__main__tmb'}).findChild('img')['src']
-
-        books.append({'name': title, 'url': url, 'thumbnail': thumbnail})
+            books.append({'name': title, 'url': url, 'thumbnail': thumbnail})
+        except:
+            pass
 
     return books
 
@@ -105,7 +104,7 @@ def get_purchased_books(session):
     books = []
     response = requests.get(library_url, cookies=session.cookies.get_dict())
     if response.status_code == 200:
-        books = get_books(response.text)
+        books = get_books_list(response.text, False)
         
         for book in books:
             book['series'] = False
@@ -122,7 +121,7 @@ def get_book_volumes(session, book):
     else:
         response = requests.get(book['url'], cookies=session.cookies.get_dict())
         if response.status_code == 200:
-            volumes = list(reversed(get_books(response.text)))
+            volumes = list(reversed(get_books_list(response.text, True)))
 
     return volumes
 

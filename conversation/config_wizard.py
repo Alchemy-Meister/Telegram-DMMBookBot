@@ -87,9 +87,12 @@ class ConfigWizard(ConversationHandler):
         return self.initial_stage + ConfigWizard.num_stages
 
     def request_config_menu(self, bot, update, concat_message=None):
+        
         user_id = update.message.from_user.id
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
+        self.db_manager.remove_session()
 
         if concat_message == None:
             message = self.lang[language_code]['config_menu_request']
@@ -115,9 +118,10 @@ class ConfigWizard(ConversationHandler):
     def config_menu(self, bot, update):
         user_id = update.message.from_user.id
         reply_menu = update.message.text
-
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
+        self.db_manager.remove_session()
 
         if reply_menu == self.lang[language_code]['language']:
             self.keyboard_request(
@@ -147,12 +151,14 @@ class ConfigWizard(ConversationHandler):
     def process_language(self, bot, update):
         user_id = update.message.from_user.id
         reply_language = update.message.text
-        language_code = self.db_manager.get_user(user_id).language_code
+        session = self.db_manager.create_session()
+        language_code = self.db_manager.get_user(session, user_id).language_code
         reply_language_code = utils.get_key_with_value(
             self.language_codes, reply_language.lower()
         )
 
         if reply_language_code == None:
+            self.db_manager.remove_session()
             self.keyboard_request(
                 update,
                 self.lang[language_code]['invalid_language'],
@@ -165,7 +171,10 @@ class ConfigWizard(ConversationHandler):
             return self.PROCESS_LANGUAGE
 
         else:
-            self.db_manager.set_user_language(user_id, reply_language_code)
+            self.db_manager.set_user_language(
+                session, user_id, reply_language_code
+            )
+            self.db_manager.remove_session()
             self.request_config_menu(
                 bot, update, concat_message='short_selected_language'
             )
@@ -226,9 +235,10 @@ class ConfigWizard(ConversationHandler):
     def account(self, bot, update):
         user_id = update.message.from_user.id
         reply_menu = update.message.text
-
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
+        self.db_manager.remove_session()
 
         if reply_menu == self.lang[language_code]['email']:
             self.send_message(
@@ -266,26 +276,33 @@ class ConfigWizard(ConversationHandler):
     def process_email(self, bot, update):
         user_id = update.message.from_user.id
         reply_email = update.message.text
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if utils.is_valid_email(reply_email):
-            self.db_manager.set_user_email(user_id, reply_email)
+            user.email = reply_email
+            self.db_manager.commit(session)
+            self.db_manager.remove_session()
             if user.save_credentials:
                 self.scheduler.schedule_user_cache(user)
+            
             self.request_account(
                 update, user, concat_messages=['email_changed']
             )
             return self.PROCESS_ACCOUNT
-        else:    
+        else:  
+            self.db_manager.remove_session()  
             self.send_message(update, language_code, ['invalid_email'])
             return self.PROCESS_EMAIL
 
     def process_password(self, bot, update):
         user_id = update.message.from_user.id
         reply_password = update.message.text
-        user = self.db_manager.get_user(user_id)
-        self.db_manager.set_user_password(user_id, reply_password)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
+        self.db_manager.set_user_password(session, user_id, reply_password)
+        self.db_manager.remove_session()
         self.scheduler.schedule_user_cache(user)
         self.request_account(update, user, concat_messages=['password_changed'])
         return self.PROCESS_ACCOUNT
@@ -293,11 +310,13 @@ class ConfigWizard(ConversationHandler):
     def process_save_credentials(self, bot, update):
         user_id = update.message.from_user.id
         reply_confirm = update.message.text
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if reply_confirm == self.lang[language_code]['yes']:
-            self.db_manager.set_save_credentials(user_id, True)
+            self.db_manager.set_save_credentials(session, user_id, True)
+            self.db_manager.remove_session()
             if user.password == None:
                 self.send_message(
                     update,
@@ -317,11 +336,12 @@ class ConfigWizard(ConversationHandler):
         else:
             if user.save_credentials:
                 self.scheduler.remove_scheduled_user_cache(user_id)
-                self.db_manager.set_user_password(user_id, None)
+                self.db_manager.set_user_password(session, user_id, None)
                 messages = ['credentials_disabled', 'password_removed']
             else:
                 messages = ['credentials_disabled']
-            self.db_manager.set_save_credentials(user_id, False)
+            self.db_manager.set_save_credentials(session, user_id, False)
+            self.db_manager.remove_session()
             self.request_account(
                 update,
                 user,
@@ -332,8 +352,9 @@ class ConfigWizard(ConversationHandler):
     def process_library(self, bot, update, concat_message=None):
         user_id = update.message.from_user.id
         reply_menu = update.message.text
-
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
+        self.db_manager.remove_session()
         language_code = user.language_code
 
         if reply_menu == self.lang[language_code]['update_library']:
@@ -380,7 +401,9 @@ class ConfigWizard(ConversationHandler):
     def process_password_update_library(self, bot, update):
         user_id = update.message.from_user.id
         reply_password = update.message.text
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
+        self.db_manager.remove_session()
         if not user.now_caching:
             self.scheduler.update_user_library(user, password=reply_password)
 
@@ -392,17 +415,23 @@ class ConfigWizard(ConversationHandler):
     def process_file_format(self, bot, update):
         user_id = update.message.from_user.id
         reply_format = update.message.text
-
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if reply_format == self.lang['common']['jpg']:
-            self.db_manager.set_user_file_format(user_id, FileFormat.jpg)
+            self.db_manager.set_user_file_format(
+                session, user_id, FileFormat.jpg
+            )
         elif reply_format == self.lang['common']['pdf']:
-            self.db_manager.set_user_file_format(user_id, FileFormat.pdf)
+            self.db_manager.set_user_file_format(
+                session, user_id, FileFormat.pdf
+            )
         elif reply_format == self.lang['common']['epub']:
-            self.db_manager.set_user_file_format(user_id, FileFormat.epub)
-
+            self.db_manager.set_user_file_format(
+                session, user_id, FileFormat.epub
+            )
+        self.db_manager.remove_session()
         self.request_library(
             update, user, concat_message='file_format_selected'
         )

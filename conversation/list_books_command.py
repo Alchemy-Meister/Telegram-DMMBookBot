@@ -10,47 +10,23 @@ import utilities as utils
 import json
 import pytz
 
-class ListBookHandler(ConversationHandler):
+class ListBookHandler(CommandHandler):
 
-    num_stages = 1
     time_zone = pytz.timezone('Asia/Tokyo')
 
-    def __init__(self, lang, language_codes, initial_stage):
+    def __init__(self, lang, language_codes):
         self.db_manager = Database.get_instance()
         self.lang = lang
         self.language_codes = language_codes
-        self.initial_stage = initial_stage
-
         self.scheduler = CronJobManager.get_instance()
 
-        self.PROCESS_PASSWORD = range(
-            initial_stage, initial_stage + ListBookHandler.num_stages
-        )
-
-        self.entry_points = [CommandHandler(
-            'my_library', self.my_library)]
-
-        self.states = {
-            self.PROCESS_PASSWORD: [RegexHandler('.*',
-                self.request_session
-            )]
-        }
-
-        self.fallbacks=[RegexHandler('finish|Finish', self.cancel)]
-
-        ConversationHandler.__init__(
-            self,
-            self.entry_points,
-            self.states,
-            self.fallbacks
-        )
-
-    def get_final_stage_num(self):
-        return self.initial_stage + ListBookHandler.num_states
+        CommandHandler.__init__(self, 'my_library', self.my_library)
 
     def my_library(self, bot, update):
         user_id = update.message.from_user.id
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if user.cache_built:
@@ -72,7 +48,15 @@ class ListBookHandler(ConversationHandler):
             
             button_library = [InlineKeyboardButton(x.title, \
                 callback_data=x.url) \
-                for x in self.db_manager.get_user_library(user_id)]
+                for x in self.db_manager.get_user_library(session, user_id)]
+
+            self.db_manager.remove_session()
+
+            button_library.append(InlineKeyboardButton(
+                self.lang[language_code]['search_library'],
+                switch_inline_query_current_chat=''
+                )
+            )
 
             reply_markup = InlineKeyboardMarkup(
                 utils.build_menu(button_library)
@@ -91,12 +75,6 @@ class ListBookHandler(ConversationHandler):
 
         return ConversationHandler.END
 
-    def request_session(self, bot, update):
-        pass
-
-    def cancel(self, bot, update):
-        pass
-
     def send_message(self, update, language_code, message_codes, 
         reply_markup=None):
         
@@ -104,13 +82,6 @@ class ListBookHandler(ConversationHandler):
         for message_code in message_codes:
             text += '\n\n' + self.lang[language_code][message_code]
         update.message.reply_text(text, reply_markup=reply_markup)
-
-    def inline_keyboard_request(self, update, language_code, message_code,
-        button_list):
-
-        reply_markup = InlineKeyboardMarkup(button_list)
-        update.message.reply_text(self.lang[language_code][message_code],
-            reply_markup=reply_markup)
 
     def inline_query_callback(bot, update):
         query = update.callback_query

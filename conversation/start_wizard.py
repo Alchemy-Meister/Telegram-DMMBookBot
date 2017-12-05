@@ -43,11 +43,12 @@ class StartWizard(ConversationHandler):
 
     def start(self, bot, update):
         user_id = update.message.from_user.id
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
 
         if user == None:
-            user = self.db_manager.insert_user(user_id)
-
+            user = self.db_manager.insert_user(session, user_id)
+        self.db_manager.remove_session()
         if user.language_code == None:
             self.keyboard_request(
                 update,
@@ -103,8 +104,10 @@ class StartWizard(ConversationHandler):
             return self.LANGUAGE
 
         else:
-            self.db_manager.set_user_language(user_id, language_code)
-            user = self.db_manager.get_user(user_id)
+            session = self.db_manager.create_session()
+            self.db_manager.set_user_language(session, user_id, language_code)
+            user = self.db_manager.get_user(session, user_id)
+            self.db_manager.remove_session()
             self.request_email(
                 update,
                 user,
@@ -127,11 +130,13 @@ class StartWizard(ConversationHandler):
     def email(self, bot, update):
         user_id = update.message.from_user.id
         reply_email = update.message.text
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if utils.is_valid_email(reply_email):
-            self.db_manager.set_user_email(user_id, reply_email)
+            self.db_manager.set_user_email(session, user_id, reply_email)
+            self.db_manager.remove_session()
             self.keyboard_request(
                 update, 
                 self.lang[language_code]['save_pass_confirm'], 
@@ -144,6 +149,7 @@ class StartWizard(ConversationHandler):
             return self.STORE_PASS
 
         else:
+            self.db_manager.remove_session()
             self.send_message(update, language_code, ['invalid_email'])
 
             return self.EMAIL
@@ -151,11 +157,13 @@ class StartWizard(ConversationHandler):
     def save_credentials(self, bot, update):
         user_id = update.message.from_user.id
         reply_confirm = update.message.text
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
         if reply_confirm == self.lang[language_code]['yes']:
-            self.db_manager.set_save_credentials(user_id, True)
+            self.db_manager.set_save_credentials(session, user_id, True)
+            self.db_manager.remove_session()
             self.send_message(
                 update,
                 language_code,
@@ -165,7 +173,8 @@ class StartWizard(ConversationHandler):
             return self.PASSWORD
 
         else:
-            self.db_manager.set_save_credentials(user_id, False)
+            self.db_manager.set_save_credentials(session, user_id, False)
+            self.db_manager.remove_session()
             self.send_message(
                 update,
                 language_code, 
@@ -179,9 +188,10 @@ class StartWizard(ConversationHandler):
     def password(self, bot, update):
         user_id = update.message.from_user.id
         reply_password = update.message.text
-        self.db_manager.set_user_password(user_id, reply_password)
-        
-        user = self.db_manager.get_user(user_id)
+        session = self.db_manager.create_session()
+        self.db_manager.set_user_password(session, user_id, reply_password)
+        user = self.db_manager.get_user(session, user_id)
+        self.db_manager.remove_session()
         language_code = user.language_code
 
         self.send_message(
