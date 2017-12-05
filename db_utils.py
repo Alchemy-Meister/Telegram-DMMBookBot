@@ -51,7 +51,8 @@ class MangaSeries(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String(250), nullable=False)
     url = Column(String(500), unique=True)
-    thumbnail = Column(String(300), unique=True)
+    thumbnail_dmm = Column(String(300), unique=True)
+    thumbnail_local = Column(String(300), unique=True)
     volumes = relationship('Manga', backref='serie', lazy='dynamic')
 
 class Author(Base):
@@ -65,7 +66,8 @@ class Manga(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String(250), nullable=False)
     url = Column(String(500), unique=True)
-    thumbnail = Column(String(300), unique=True)
+    thumbnail_dmm = Column(String(300), unique=True)
+    thumbnail_local = Column(String(300), unique=True)
     pages = Column(Integer)
     author_id = Column(Integer, ForeignKey('author.id'))
     serie_id = Column(Integer, ForeignKey('manga_serie.id'))
@@ -88,7 +90,8 @@ class Database():
             self.session_manager = scoped_session(
                 sessionmaker(
                     bind=self.engine, 
-                    expire_on_commit=False
+                    expire_on_commit=False,
+                    autoflush=True
                 )
             )
             Database.__instance = self
@@ -115,11 +118,6 @@ class Database():
     def get_user(self, session, user_id):
         return session.query(User).filter(User.id == user_id).first()
 
-    def user_owns_serie(self, session, user_id, url):
-        return session.query(MangaSeries) \
-            .join(Manga, MangaSeries.volumes, User.book_collection) \
-            .filter(MangaSeries.url == url).filter(User.id == user_id).first()
-
     def get_user_library(self, session, user_id):
         books = session.query(Manga).join(User.book_collection) \
             .filter(User.id == user_id).filter(Manga.serie_id == None).all()
@@ -131,7 +129,19 @@ class Database():
         library.sort(key=lambda x: x.title)
         return library
 
-        # newlist = sorted(list_to_be_sorted, key=lambda k: k['name']) 
+    def get_user_library_by_title(self, session, user_id, title):
+        books = session.query(Manga).join(User.book_collection) \
+            .filter(User.id == user_id).filter(Manga.serie_id == None) \
+            .filter(Manga.title.like('%{}%'.format(title))).all()
+
+        series = session.query(MangaSeries).join(User.book_collection) \
+            .filter(User.id == user_id).filter(
+                MangaSeries.title.like('%{}%'.format(title))
+            ).all()
+
+        library = books + series
+        library.sort(key=lambda x: x.title)
+        return library
 
     def get_credentialed_users(self, session):
         return session.query(User).filter(User.password != None) \
@@ -207,3 +217,10 @@ class Database():
     def get_manga_serie(self, session, url):
         return session.query(MangaSeries).filter(MangaSeries.url == url) \
             .first()
+
+    def get_manga_volume(self, session, url):
+        return session.query(Manga).filter(Manga.url == url).first()
+
+    def user_owns_volume(self, session, user_id, url):
+        return session.query(Manga).join(User.book_collection) \
+            .filter(User.id == user_id).filter(Manga.url == url).first()

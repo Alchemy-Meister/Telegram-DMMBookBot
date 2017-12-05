@@ -25,7 +25,6 @@ class ListBookHandler(CommandHandler):
     def my_library(self, bot, update):
         user_id = update.message.from_user.id
         session = self.db_manager.create_session()
-        
         user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 

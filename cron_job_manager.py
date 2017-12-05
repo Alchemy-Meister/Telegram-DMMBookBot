@@ -110,28 +110,36 @@ class CronJobManager:
 
     @staticmethod
     def thumbnail(session, db_object, db_manager, parent=None):
-        db_manager.flush(session)
-        if db_object.id:
-            if parent:
-                thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
-                    CronJobManager.download_path, 
-                    parent.title,
-                    parent.id, 
-                    db_object.title,
-                    db_object.id
+        print('Thumbnail bitch!!')
+        try:
+            db_manager.flush(session)
+            if db_object.id:
+                if parent:
+                    thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
+                        CronJobManager.download_path, 
+                        parent.title,
+                        parent.id, 
+                        db_object.title,
+                        db_object.id
+                    )
+                else:
+                    thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
+                        CronJobManager.download_path, db_object.title, db_object.id
                 )
+                print(thumbnail_path)
+                if not utils.dir_exists(thumbnail_path):
+                    utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
+                    dmm.download_image(db_object.thumbnail_dmm, thumbnail_path)
+                    db_object.thumbnail_local = thumbnail_path
+                    try:
+                        db_manager.commit(session)
+                    except Exception as e:
+                        print(e)
+                        db_manager.rollback(session)
             else:
-                thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
-                    CronJobManager.download_path, db_object.title, db_object.id
-            )
-            if not utils.dir_exists(thumbnail_path):
-                utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
-                dmm.download_image(db_object.thumbnail, thumbnail_path)
-                db_object.thumbnail = thumbnail_path
-                try:
-                    db_manager.commit(session)
-                except Exception as e:
-                    db_manager.rollback(session)
+                print('Flush not working!!')
+        except:
+            print(e)
 
     @staticmethod
     def cache_user_library(user, session=None, password=None, fast=False):
@@ -152,26 +160,34 @@ class CronJobManager:
                     serie = db_manager.get_manga_serie(db_session, book['url'])
                     if not serie:
                         serie = MangaSeries(title=book['name'], url=book['url'], 
-                            thumbnail=book['thumbnail'])
-
+                            thumbnail_dmm=book['thumbnail'])
+                        db_session.add(serie)
+                        CronJobManager.thumbnail(db_session, serie, db_manager)
                     volumes = dmm.get_book_volumes(session, book)
                     for volume in volumes:
-                        db_volume = Manga(
-                            title=volume['name'],
-                            url=volume['url'],
-                            thumbnail=volume['thumbnail'],
-                            serie=serie
+                        db_volume = db_manager.get_manga_volume(
+                            db_session, volume['url']
                         )
-                        try:
-                            user.book_collection.append(db_volume)
-                            db_manager.commit(db_session)
+                        if not db_volume:
+                            db_volume = Manga(
+                                title=volume['name'],
+                                url=volume['url'],
+                                thumbnail_dmm=volume['thumbnail'],
+                                serie=serie
+                            )
+                            db_session.add(db_volume)
                             CronJobManager.thumbnail(db_session,
                                 db_volume, db_manager, parent=serie
                             )
-                        except Exception as e:
-                            print(e)
-                            db_manager.rollback(db_session)
-                    CronJobManager.thumbnail(db_session, serie, db_manager)
+                        if not db_manager.user_owns_volume(db_session, \
+                            user.id, db_volume.url):
+
+                            try:
+                                user.book_collection.append(db_volume)
+                                db_manager.commit(db_session)
+                            except Exception as e:
+                                print(e)
+                                db_manager.rollback(db_session)
                 else:
                     book = Manga(title=book['name'], url=book['url'])
                     try:
@@ -214,6 +230,3 @@ class CronJobManager:
             CronJobManager.__instance.db_manager.remove_session()
 
         return CronJobManager.__instance 
-
-
-        
