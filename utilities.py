@@ -5,6 +5,8 @@ import os
 import sys
 import re
 import dmm_ripper as dmm
+from datetime import datetime
+from pytz import timezone, utc
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CWD = os.getcwd()
@@ -56,3 +58,9 @@ def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
     if footer_buttons:
         menu.append(footer_buttons)
     return menu
+
+def logging_tz(*args):
+    utc_dt = utc.localize(datetime.utcnow())
+    my_tz = timezone('Asia/Tokyo')
+    converted = utc_dt.astimezone(my_tz)
+    return converted.timetuple()

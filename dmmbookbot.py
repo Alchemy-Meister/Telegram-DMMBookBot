@@ -11,24 +11,16 @@ from conversation import (StartWizard, ConfigWizard, ListBookHandler,
 from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
-from datetime import datetime
-from pytz import timezone, utc
 from config import Config
 import logging
 import json
 import utilities as utils
 
-def logging_tz(*args):
-    utc_dt = utc.localize(datetime.utcnow())
-    my_tz = timezone('Asia/Tokyo')
-    converted = utc_dt.astimezone(my_tz)
-    return converted.timetuple()
-
 # Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
-logging.Formatter.converter = logging_tz
+logging.Formatter.converter = utils.logging_tz
 logger = logging.getLogger(__name__)
 
 def main():

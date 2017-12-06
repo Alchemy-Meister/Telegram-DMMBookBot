@@ -27,7 +27,6 @@ class CronJobManager:
         else:
             self.update_cron_start_time()
             self.db_manager = Database.get_instance()
-
             jobstores = {
                 # 'alchemy': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite'),
                 'default': MemoryJobStore()
@@ -47,9 +46,7 @@ class CronJobManager:
                 job_defaults=job_defaults,
                 timezone=CronJobManager.time_zone,
                 daemon=False)
-
             self.scheduler.start()
-
             CronJobManager.__instance = self
 
     def set_download_path(self, path):
@@ -66,6 +63,8 @@ class CronJobManager:
         return self.cron_start_time
 
     def update_user_library(self, user, session=None, password=None):
+        CronJobManager.logger.info('Executing library caching job for ' \
+            + 'user %s', user.id)
         self.scheduler.add_job(
             CronJobManager.__instance.cache_user_library,
             args=[user],
@@ -75,8 +74,8 @@ class CronJobManager:
     def schedule_user_cache(self, user):
         self.remove_scheduled_user_cache(user.id)
 
-        print(self.update_cron_start_time())
-
+        CronJobManager.logger.info('Scheduling library caching job for ' \
+            + 'user %s', user.id)
         job = self.scheduler.add_job(
             self.cache_user_library,
             'interval',
@@ -93,6 +92,8 @@ class CronJobManager:
     @staticmethod
     def remove_scheduled_user_cache(user_id):
         if user_id in CronJobManager.jobs:
+            CronJobManager.logger.info('Removing scheduled library caching ' \
+                + 'job for user %s', user_id)
             CronJobManager.jobs[user_id].remove()
             del CronJobManager.jobs[user_id]
 
@@ -235,13 +236,15 @@ class CronJobManager:
     def get_instance():
         if CronJobManager.__instance == None:
             CronJobManager()
+            CronJobManager.logger.info('CronJobManager singleton instanciated')
             session = CronJobManager.__instance.db_manager.create_session()
+            CronJobManager.logger.info('Executing unprocessed library ' \
+                + 'caching jobs')
             for user in CronJobManager.__instance.db_manager \
                 .get_credentialed_users(session):
                 
                 if not user.login_error:
                     if user.cache_expire_date <= datetime.now():
-                        print('execute last unprocessed job.')
                         CronJobManager.__instance.update_user_library(user)
 
                     CronJobManager.__instance.schedule_user_cache(user)
