@@ -1,25 +1,24 @@
-import pytz
-from datetime import datetime, timedelta
-
-from db_utils import Database, User, Manga, MangaSeries
-import dmm_ripper as dmm
-import utilities as utils
-
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.memory import MemoryJobStore
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+#from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.pool import ProcessPoolExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED
+from datetime import datetime, timedelta
+from db_utils import Database, User, Manga, MangaSeries
+import dmm_ripper as dmm
+import logging
+import utilities as utils
+import pytz
 
 class CronJobManager:
     
     __instance = None
     time_zone = pytz.timezone('Asia/Tokyo')
-    start_hour = 4
-    start_min = 51
+    start_hour = 3
+    start_min = 0
     download_path = utils.get_abs_path('./downloads')
-
     jobs = {}
+    logger = logging.getLogger(__name__)
 
     def __init__(self):
 
@@ -110,49 +109,48 @@ class CronJobManager:
 
     @staticmethod
     def thumbnail(session, db_object, db_manager, parent=None):
-        print('Thumbnail bitch!!')
-        try:
-            db_manager.flush(session)
-            if db_object.id:
-                if parent:
-                    thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
-                        CronJobManager.download_path, 
-                        parent.title,
-                        parent.id, 
-                        db_object.title,
-                        db_object.id
-                    )
-                else:
-                    thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
-                        CronJobManager.download_path, db_object.title, db_object.id
+        db_manager.flush(session)
+        if db_object.id:
+            if parent:
+                thumbnail_path = '{}/{}-{}/{}-{}/thumbnail.jpg'.format(
+                    CronJobManager.download_path, 
+                    parent.title,
+                    parent.id, 
+                    db_object.title,
+                    db_object.id
                 )
-                print(thumbnail_path)
-                if not utils.dir_exists(thumbnail_path):
-                    utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
-                    dmm.download_image(db_object.thumbnail_dmm, thumbnail_path)
-                    db_object.thumbnail_local = thumbnail_path
-                    try:
-                        db_manager.commit(session)
-                    except Exception as e:
-                        print(e)
-                        db_manager.rollback(session)
             else:
-                print('Flush not working!!')
-        except:
-            print(e)
+                thumbnail_path = '{}/{}-{}/thumbnail.jpg'.format(
+                    CronJobManager.download_path, db_object.title, db_object.id
+            )
+            if not utils.dir_exists(thumbnail_path):
+                utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
+                dmm.download_image(db_object.thumbnail_dmm, thumbnail_path)
+                CronJobManager.logger.info('Storing thubnail in %s', 
+                    thumbnail_path
+                )
+                db_object.thumbnail_local = thumbnail_path
+                try:
+                    db_manager.commit(session)
+                except Exception as e:
+                    CronJobManager.logger.exception('Error updating local ' \
+                        + 'thubnail\'s path for: %s', db_object.title)
+                    db_manager.rollback(session)
 
     @staticmethod
     def cache_user_library(user, session=None, password=None, fast=False):
         db_manager = Database.get_instance()
         db_session = db_manager.create_session()
         db_manager.set_user_now_caching(db_session, user.id, True)
-        print('{} user\'s cache running'.format(user.id))
+        CronJobManager.logger.info('Caching %s user\'s library', user.id)
 
         try:
             if session == None:
                 if user.save_credentials:
                     password = user.password
                 session = dmm.get_session(user.email, password, fast)
+                CronJobManager.logger.info('Obtaining a new DMM session for ' \
+                    + 'user %s', user.id)
             books = dmm.get_purchased_books(session)
             db_session.add(user)
             for book in books:
@@ -162,6 +160,8 @@ class CronJobManager:
                         serie = MangaSeries(title=book['name'], url=book['url'], 
                             thumbnail_dmm=book['thumbnail'])
                         db_session.add(serie)
+                        CronJobManager.logger.info('Adding a new serie to DB: '
+                            + '%s', serie.title)
                         CronJobManager.thumbnail(db_session, serie, db_manager)
                     volumes = dmm.get_book_volumes(session, book)
                     for volume in volumes:
@@ -176,40 +176,58 @@ class CronJobManager:
                                 serie=serie
                             )
                             db_session.add(db_volume)
+                            CronJobManager.logger.info('Adding a new volume ' \
+                                + ' to DB: %s', db_volume.title)
                             CronJobManager.thumbnail(db_session,
                                 db_volume, db_manager, parent=serie
                             )
-                        if not db_manager.user_owns_volume(db_session, \
+                        if not db_manager.user_owns_volume(db_session,
                             user.id, db_volume.url):
-
+                            CronJobManager.logger.info('Adding volume to ' \
+                                + 'user %s', user.id)
                             try:
                                 user.book_collection.append(db_volume)
                                 db_manager.commit(db_session)
                             except Exception as e:
-                                print(e)
+                                CronJobManager.logger.exception('Error ' \
+                                    + 'adding volume to user %s', user.id)
                                 db_manager.rollback(db_session)
                 else:
-                    book = Manga(title=book['name'], url=book['url'])
-                    try:
-                        user.book_collection.append(book)
-                        db_manager.commit(session)
-                    except:
-                        print(e)
-                        db_manager.rollback(session)
+                    book = db_manager.get_manga_volume(db_session, book['url'])
+                    if not book:
+                        book = Manga(title=book['name'], url=book['url'],
+                            thumbnail_dmm=book['thumbnail'])
+                        db_session.add(book)
+                        CronJobManager.logger.info('Adding a new non series ' \
+                            + 'book to DB: %s', book.title)
+                        CronJobManager.thumbnail(db_session, book, db_manager)
+                    if not db_manager.user_owns_volume(db_session, user.id,
+                        book.url):
+                        CronJobManager.logger.info('Adding non series book ' \
+                            + 'to user %s', user.id)
+                        try:
+                            user.book_collection.append(book)
+                            db_manager.commit(session)
+                        except:
+                            CronJobManager.logger.exception('Error adding ' \
+                                + 'non series book to user %s', user.id)
+                            db_manager.rollback(session)
 
 
             db_manager.set_user_cache_expire_date(
                 db_session, user.id, CronJobManager.get_cache_expire_date()
             )
             db_manager.set_user_cache_built(db_session, user.id, True)
-
             db_manager.set_user_login_error(db_session, user.id, False)
         except Exception as e:
-            print(e)
+            CronJobManager.logger.info('Unable to login to the DMM account ' \
+                + 'of user %s', user.id)
             db_manager.set_user_login_error(db_session, user.id, True)
             CronJobManager.remove_scheduled_user_cache(user.id)
         finally:
-            print('{} user\'s cache ended'.format(user.id))
+            CronJobManager.logger.info(
+                '%s user\'s library caching ended', user.id
+            )
             db_manager.set_user_now_caching(db_session, user.id, False)
             db_manager.remove_session()
 

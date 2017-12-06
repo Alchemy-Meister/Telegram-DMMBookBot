@@ -55,14 +55,10 @@ def main():
     dispatcher.add_handler(config_handler)
     dispatcher.add_handler(list_books_handler)
     dispatcher.add_handler(search_book_handler)
-    dispatcher.add_error_handler(error)
-    
-    updater.start_polling(timeout=40)
-    updater.idle()
 
-def error(bot, update, error):
-    """Log Errors caused by Updates."""
-    logger.warning('Update "%s" caused error "%s"', update, error)
+    
+    updater.start_polling(timeout=60)
+    updater.idle()
 
 if __name__ == '__main__':
     main()
