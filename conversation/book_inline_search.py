@@ -5,24 +5,58 @@ from telegram.utils.helpers import escape_markdown
 from telegram import (InlineQueryResultArticle, ParseMode,
     InputTextMessageContent, InlineKeyboardButton,
     InlineKeyboardMarkup)
-from telegram.ext import InlineQueryHandler
-from db_utils import Database
+from telegram.ext import (InlineQueryHandler, CallbackQueryHandler,
+    ChosenInlineResultHandler)
+from db_utils import Database, MangaSeries
 
 import utilities as utils
 
 class BookSearchHandler(InlineQueryHandler):
 
-    def __init__(self):
-        InlineQueryHandler.__init__(self, self.search_book)
-        self.db_manager = Database.get_instance()
+    series_regex = r'^series ([0-9]+):(.*)'
 
-    def search_book(self, bot, update):
+    def __init__(self, lang):
+        self.lang = lang
+        self.db_manager = Database.get_instance()
+        InlineQueryHandler.__init__(self, self.inline_query)
+
+    def inline_query(self, bot, update):
         results = []
         user_id = update.inline_query.from_user.id
         query = update.inline_query.query
+        print(update.inline_query)
         session = self.db_manager.create_session()
-        collection = self.db_manager.get_user_library_by_title(session, user_id, query)
-        for book in collection:
+        user = self.db_manager.get_user(session, user_id)
+        language_code = user.language_code
+        match = re.match(BookSearchHandler.series_regex, query)
+        if match:
+            result = self.db_manager.get_user_volumes_from_serie(
+                session, user_id, match.group(1), match.group(2)
+            )
+        else:
+            result = self.db_manager.get_user_library_by_title(
+                session, user_id, query
+            )
+        for book in result:
+            if isinstance(book, MangaSeries):
+                buttons = InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton(
+                            self.lang[language_code]['search_volume'], 
+                            switch_inline_query_current_chat='series {}: ' \
+                                .format(book.id)
+                        )]
+                    ]
+                )
+            else:
+                buttons = InlineKeyboardMarkup(
+                    [
+                        [InlineKeyboardButton(
+                            self.lang[language_code]['download'], 
+                            callback_data='asd'
+                        )]
+                    ]
+                )
             results.append(
                 InlineQueryResultArticle(
                     id=uuid4(),
@@ -32,9 +66,9 @@ class BookSearchHandler(InlineQueryHandler):
                     input_message_content=InputTextMessageContent(
                         book.title
                     ),
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('download', callback_data='qwe')]])
+                    reply_markup=buttons
                 )
             )
-
         update.inline_query.answer(results)
+        self.db_manager.remove_session()
 

@@ -35,6 +35,8 @@ en = {
 'build_library_error': 'I couldn\'t log in to DMM while building your library cache. Please check your credentials and run /config > Library > Update Library',
 'request_update_library': 'I need to build a cache of your library before I can execute this command. Please, run /config > Library > Update Library periodically to have your collection updated. Otherwise, you can consider saving your DMM account\'s credentials so I can update it for you automatically.',
 'search_library': 'Search by title',
+'search_volume': 'Search volume of the series',
+'download': 'Download',
 'file_format': 'File format',
 'request_format':'Send me the file format in which you want your books to be downloaded:',
 'file_format_selected': 'I have updated the File format',

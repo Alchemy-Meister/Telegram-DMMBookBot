@@ -4,8 +4,7 @@
 
 from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
     InlineKeyboardButton, InlineKeyboardMarkup)
-from telegram.ext import (Updater, CommandHandler, MessageHandler, 
-    CallbackQueryHandler)
+from telegram.ext import (Updater, CommandHandler, MessageHandler)
 from conversation import (StartWizard, ConfigWizard, ListBookHandler, 
     BookSearchHandler)
 from cron_job_manager import CronJobManager
@@ -22,6 +21,9 @@ logging.basicConfig(
     level=logging.INFO)
 logging.Formatter.converter = utils.logging_tz
 logger = logging.getLogger(__name__)
+
+def inline_result(bot, update):
+    print(update)
 
 def main():
     lang = {'en': english.en, 'ja': japanese.ja, 'common': common.common}
@@ -41,14 +43,13 @@ def main():
         intro_wizard_handler.get_final_stage_num()
     )
     list_books_handler = ListBookHandler(lang, language_codes)
-    search_book_handler = BookSearchHandler()
+    search_book_handler = BookSearchHandler(lang)
 
     dispatcher.add_handler(intro_wizard_handler)
     dispatcher.add_handler(config_handler)
     dispatcher.add_handler(list_books_handler)
     dispatcher.add_handler(search_book_handler)
 
-    
     updater.start_polling(timeout=60)
     updater.idle()
 
