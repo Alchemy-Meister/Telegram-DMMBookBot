@@ -158,8 +158,11 @@ class CronJobManager:
                 if book['series']:
                     serie = db_manager.get_manga_serie(db_session, book['url'])
                     if not serie:
-                        serie = MangaSeries(title=book['name'], url=book['url'], 
-                            thumbnail_dmm=book['thumbnail'])
+                        serie = MangaSeries(
+                            title=book['name'],
+                            url=book['url'], 
+                            thumbnail_dmm=book['thumbnail']
+                        )
                         db_session.add(serie)
                         CronJobManager.logger.info('Adding a new serie to DB: '
                             + '%s', serie.title)
@@ -170,10 +173,15 @@ class CronJobManager:
                             db_session, volume['url']
                         )
                         if not db_volume:
+                            volume_details = dmm.get_book_details(
+                                session, volume['details_url']
+                            )
                             db_volume = Manga(
                                 title=volume['name'],
                                 url=volume['url'],
                                 thumbnail_dmm=volume['thumbnail'],
+                                description=volume_details['description'],
+                                pages=volume_details['pages'],
                                 serie=serie
                             )
                             db_session.add(db_volume)
@@ -196,8 +204,17 @@ class CronJobManager:
                 else:
                     book = db_manager.get_manga_volume(db_session, book['url'])
                     if not book:
-                        book = Manga(title=book['name'], url=book['url'],
-                            thumbnail_dmm=book['thumbnail'])
+                        book_details = dmm.get_book_details(
+                            session, book['details_url']
+                        )
+                        book = Manga(
+                            title=book['name'],
+                            url=book['url'],
+                            thumbnail_dmm=book['thumbnail'], 
+                            description=book_details['description'],
+                            pages=book_details['pages'],
+                            serie=serie
+                        )
                         db_session.add(book)
                         CronJobManager.logger.info('Adding a new non series ' \
                             + 'book to DB: %s', book.title)

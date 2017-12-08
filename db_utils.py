@@ -66,6 +66,7 @@ class Manga(Base):
     url = Column(String(500), unique=True)
     thumbnail_dmm = Column(String(300), unique=True)
     thumbnail_local = Column(String(300), unique=True)
+    description = Column(String(5000))
     pages = Column(Integer)
     author_id = Column(Integer, ForeignKey('author.id'))
     serie_id = Column(Integer, ForeignKey('manga_serie.id'))
@@ -129,24 +130,26 @@ class Database():
         return library
 
     def get_user_library_by_title(self, session, user_id, title):
+        filters = [User.id == user_id, Manga.serie_id == None]
+        if not title.isspace():
+            filters.append(Manga.title.like('%{}%'.format(title)))
         books = session.query(Manga).join(User.book_collection) \
-            .filter(User.id == user_id).filter(Manga.serie_id == None) \
-            .filter(Manga.title.like('%{}%'.format(title))).all()
-
+            .filter(*filters).all()
+        filters = [User.id == user_id]
+        if not title.isspace():
+            filters.append(MangaSeries.title.like('%{}%'.format(title)))
         series = session.query(MangaSeries).join(User.book_collection) \
-            .filter(User.id == user_id).filter(
-                MangaSeries.title.like('%{}%'.format(title))
-            ).all()
-
+            .filter(*filters).all()
         library = books + series
         library.sort(key=lambda x: x.title)
         return library
 
     def get_user_volumes_from_serie(self, session, user_id, series_id, title):
+        filters = [Manga.serie_id == series_id, User.id == user_id]
+        if not title.isspace():
+            filters.append(Manga.title.like('%{}%'.format(title)))
         return session.query(Manga).join(User.book_collection) \
-            .filter(Manga.serie_id == series_id) \
-            .filter(Manga.title.like('%{}%'.format(title))) \
-            .filter(User.id == user_id).all()
+            .filter(*filters).all()
 
     def get_credentialed_users(self, session):
         return session.query(User).filter(User.password != None) \
@@ -238,6 +241,9 @@ class Database():
 
     def get_manga_volume(self, session, url):
         return session.query(Manga).filter(Manga.url == url).first()
+
+    def get_volume_by_id(self, session, volume_id):
+        return session.query(Manga).filter(Manga.id == volume_id).first()
 
     def user_owns_volume(self, session, user_id, url):
         return session.query(Manga).join(User.book_collection) \

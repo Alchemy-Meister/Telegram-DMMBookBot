@@ -59,6 +59,20 @@ def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
         menu.append(footer_buttons)
     return menu
 
+def book_missing_pages(start_page, end_page, page_list):
+    return sorted(set(range(start_page, end_page + 1)).difference(page_list))
+
+def get_book_download_path(base_path, book):
+    if book.serie_id:
+        return '{}/{}-{}/{}-{}'.format(
+            base_path, book.serie.title, book.serie_id, book.title, book.id
+        )
+    else:
+        return '{}/{}-{}'.format(base_path, book.title, book.id)
+
+def get_book_images(path):
+    return [img for img in os.listdir(path) if img.endswith('.jpg')]
+
 def logging_tz(*args):
     utc_dt = utc.localize(datetime.utcnow())
     my_tz = timezone('Asia/Tokyo')

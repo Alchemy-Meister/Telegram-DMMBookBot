@@ -70,7 +70,7 @@ def get_session(email, password, fast=False):
 
     return session
 
-def get_books_list(html, is_volume_list):
+def get_books_list(html):
     books = []
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -84,17 +84,22 @@ def get_books_list(html, is_volume_list):
         try:
             book_link = book_div.findChild(attrs={'class': \
                 'm-boxListBookProductBlock__item'}).findChild()['href']
-
-            title = book_div.findChild(attrs={'class': \
-                'm-boxListBookProductBlock__main__info__ttl'}).findChild() \
-                .contents[0]
-
-            url = book_url + book_link
+            title_div = book_div.findChild(attrs={'class': \
+                'm-boxListBookProductBlock__main__info__ttl'})
+            book_details_url = title_div.findChild()['href']
+            title = title_div.findChild().contents[0]
 
             thumbnail = book_div.findChild(attrs={'class': \
                 'm-boxListBookProductBlock__main__tmb'}).findChild('img')['src']
 
-            books.append({'name': title, 'url': url, 'thumbnail': thumbnail})
+            url = book_url + book_link
+
+            books.append({
+                'name': title,
+                'url': url,
+                'details_url': book_details_url,
+                'thumbnail': thumbnail
+            })
         except:
             pass
 
@@ -104,7 +109,7 @@ def get_purchased_books(session):
     books = []
     response = requests.get(library_url, cookies=session.cookies.get_dict())
     if response.status_code == 200:
-        books = get_books_list(response.text, False)
+        books = get_books_list(response.text)
         
         for book in books:
             book['series'] = False
@@ -121,9 +126,30 @@ def get_book_volumes(session, book):
     else:
         response = requests.get(book['url'], cookies=session.cookies.get_dict())
         if response.status_code == 200:
-            volumes = list(reversed(get_books_list(response.text, True)))
+            volumes = list(reversed(get_books_list(response.text)))
 
     return volumes
+
+def get_book_details(session, details_url):
+    details = None
+    try:
+        response = requests.get(details_url, cookies=session.cookies.get_dict())
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            description = soup.find(
+                'div', {'class': 'm-boxDetailProduct__info__story'}
+            ).contents[0].strip()
+            product_info = soup.find('div', {'class': 'm-boxDetailProductInfo'})
+            pages = re.match(
+                r'^([0-9]+)ページ', 
+                product_info.findChildren(
+                    'dd', {'class': 'm-boxDetailProductInfo__list__description'}
+                )[2].contents[0].strip()
+            ).group(1) 
+            details = {'description': description, 'pages': pages}
+    except Exception as e:
+        print(e)
+    return details
 
 def get_book_vars(html):
     soup = BeautifulSoup(html, 'html.parser')
@@ -151,15 +177,12 @@ def get_image_path(path, book_vars, page):
     filename_template = '{}/{}-{}.jpg'
     return filename_template.format(path, book_vars[var_ids[1]], page)
 
-    return filename_template.format(book_vars[var_ids[1], str(page).zfill(4)])
-
 def download_image(url, path):
     response = requests.get(url, stream=True)
     if response.status_code == 200:
         with open(path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=1024):
                 f.write(chunk)
-
 
 def download_book(session, book, path):
     response = requests.get(book['url'], cookies=session.cookies.get_dict())

@@ -6,7 +6,7 @@ from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
     InlineKeyboardButton, InlineKeyboardMarkup)
 from telegram.ext import (Updater, CommandHandler, MessageHandler)
 from conversation import (StartWizard, ConfigWizard, ListBookHandler, 
-    BookSearchHandler)
+    BookSearchHandler, BookDownloadHandler)
 from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
@@ -15,7 +15,6 @@ import logging
 import json
 import utilities as utils
 
-# Enable logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO)
@@ -44,11 +43,13 @@ def main():
     )
     list_books_handler = ListBookHandler(lang, language_codes)
     search_book_handler = BookSearchHandler(lang)
+    book_download_handler = BookDownloadHandler(Config.DOWNLOAD_PATH)
 
     dispatcher.add_handler(intro_wizard_handler)
     dispatcher.add_handler(config_handler)
     dispatcher.add_handler(list_books_handler)
     dispatcher.add_handler(search_book_handler)
+    dispatcher.add_handler(book_download_handler)
 
     updater.start_polling(timeout=60)
     updater.idle()
