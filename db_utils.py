@@ -70,6 +70,7 @@ class Manga(Base):
     pages = Column(Integer)
     author_id = Column(Integer, ForeignKey('author.id'))
     serie_id = Column(Integer, ForeignKey('manga_serie.id'))
+    now_downloading = Column(Boolean(create_constraint=False), default=False)
 
 class Database():
 
@@ -223,17 +224,9 @@ class Database():
             .update({'login_error': login_error})
         session.commit()
 
-    def commit(self, session):
-        session.commit()
-
-    def rollback(self, session):
-        session.rollback()
-
-    def flush(self, session):
-        session.flush()
-
-    def expunge(self, session, object):
-        session.expunge(object)
+    def user_owns_volume(self, session, user_id, url):
+        return session.query(Manga).join(User.book_collection) \
+            .filter(User.id == user_id).filter(Manga.url == url).first()
 
     def get_manga_serie(self, session, url):
         return session.query(MangaSeries).filter(MangaSeries.url == url) \
@@ -245,6 +238,22 @@ class Database():
     def get_volume_by_id(self, session, volume_id):
         return session.query(Manga).filter(Manga.id == volume_id).first()
 
-    def user_owns_volume(self, session, user_id, url):
-        return session.query(Manga).join(User.book_collection) \
-            .filter(User.id == user_id).filter(Manga.url == url).first()
+    def set_volume_now_downloading(self, session, volume_id, now_downloading):
+        self.logger.info(
+            'Updating the now downloading flag for volume %s', volume_id
+        )
+        session.query(Manga).filter_by(id=volume_id) \
+            .update({'now_downloading': now_downloading})
+        session.commit()
+
+    def commit(self, session):
+        session.commit()
+
+    def rollback(self, session):
+        session.rollback()
+
+    def flush(self, session):
+        session.flush()
+
+    def expunge(self, session, object):
+        session.expunge(object)

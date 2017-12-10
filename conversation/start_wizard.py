@@ -10,15 +10,15 @@ class StartWizard(ConversationHandler):
 
     num_states = 4
 
-    def __init__(self, lang, language_codes, initial_stage):
+    def __init__(self, lang, language_codes, initial_state):
         self.db_manager = Database.get_instance()
         self.scheduler = CronJobManager.get_instance()
         self.logger = logging.getLogger(__name__)
         self.lang = lang
         self.language_codes = language_codes
-        self.initial_stage = initial_stage
+        self.initial_state = initial_state
         self.LANGUAGE, self.EMAIL, self.PASSWORD, self.STORE_PASS = range(
-            initial_stage, initial_stage + StartWizard.num_states
+            initial_state, initial_state + StartWizard.num_states
         )
         self.entry_points = [CommandHandler('start', self.start)]
         self.states = {
@@ -36,8 +36,8 @@ class StartWizard(ConversationHandler):
             fallbacks=self.fallbacks
         )
     
-    def get_final_stage_num(self):
-        return self.initial_stage + StartWizard.num_states
+    def get_final_state_num(self):
+        return self.initial_state + StartWizard.num_states
 
     def start(self, bot, update):
         user_id = update.message.from_user.id

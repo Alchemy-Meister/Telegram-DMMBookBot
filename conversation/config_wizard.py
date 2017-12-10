@@ -7,23 +7,21 @@ import utilities as utils
 
 class ConfigWizard(ConversationHandler):
 
-    num_stages = 9
+    num_states = 9
 
-    def __init__(self, lang, language_codes, initial_stage):
+    def __init__(self, lang, language_codes, initial_state):
 
         self.db_manager = Database.get_instance()
         self.scheduler = CronJobManager.get_instance()
         self.lang = lang
         self.language_codes = language_codes
-        self.initial_stage = initial_stage
-
+        self.initial_state = initial_state
         self.CONFIG, self.PROCESS_LANGUAGE, self.PROCESS_ACCOUNT, \
         self.PROCESS_LIBRARY, self.PROCESS_EMAIL, self.PROCESS_PASSWORD, \
         self.PROCESS_CREDENTIALS, self.PROCESS_UPDATE_LIBRARY_PASSWORD, \
         self.PROCESS_FILE_FORMAT = range(
-            initial_stage, initial_stage + ConfigWizard.num_stages
+            initial_state, initial_state + ConfigWizard.num_states
         )
-
         self.entry_points = [CommandHandler(
             'config', self.request_config_menu)]
         self.states = {
@@ -83,8 +81,8 @@ class ConfigWizard(ConversationHandler):
             fallbacks=self.fallbacks
         )
 
-    def get_final_stage_num(self):
-        return self.initial_stage + ConfigWizard.num_stages
+    def get_final_state_num(self):
+        return self.initial_state + ConfigWizard.num_states
 
     def request_config_menu(self, bot, update, concat_message=None):
         

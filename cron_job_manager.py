@@ -18,6 +18,7 @@ class CronJobManager:
     start_min = 0
     download_path = utils.get_abs_path('./downloads')
     jobs = {}
+    book_job = {}
     logger = logging.getLogger(__name__)
 
     def __init__(self):
@@ -248,6 +249,74 @@ class CronJobManager:
             )
             db_manager.set_user_now_caching(db_session, user.id, False)
             db_manager.remove_session()
+
+    def subcribe_to_book_download(self, book, user, bot, update, password=None):
+        if book.id not in CronJobManager.book_job:
+            CronJobManager.logger.info('Registering the download request of ' \
+                + 'book %s', book.id)
+            CronJobManager.book_job[book.id] = []
+        if not any(job['user'].id == user.id \
+            for job in CronJobManager.book_job[book.id]):
+            CronJobManager.logger.info('Subscribing user %s to download job ' \
+                + 'of book %s', user.id, book.id)
+            CronJobManager.book_job[book.id].append(
+                {'user': user, 'password': password, 'bot': bot, 'chat': update}
+            )
+
+    def download_book_pages(self, book_path, missing_images, book, user,
+        bot, update, password=None):
+        self.subcribe_to_book_download(
+            book, user, bot, update, password=password
+        )
+        self.scheduler.add_job(
+            CronJobManager.__instance.download_book_pages_job,
+            args=[book_path, missing_images, book]
+        )
+
+    @staticmethod
+    def download_book_pages_job(book_path, missing_images, book):
+        db_manager = Database.get_instance()
+        db_session = db_manager.create_session()
+        dmm_session = None
+        CronJobManager.logger.info('Starting download job of book %s', book.id)
+        db_manager.set_volume_now_downloading(db_session, book.id, True)
+        for index, subcriber in enumerate(CronJobManager.book_job[book.id]):
+            user = subcriber['user']
+            if subcriber['password']:
+                password = subcriber['password']
+            else:
+                password = user.password
+            try:
+                CronJobManager.logger.info('Obtaining a new DMM session for ' \
+                    + 'subcriber %s', user.id)
+                dmm_session = dmm.get_session(user.email, password, False)
+                break
+            except Exception as e:
+                CronJobManager.logger.info('Unable to login to the DMM ' \
+                    + 'account of subscriber %s. Attempt %s out of %s', 
+                    user.id, index + 1, len(CronJobManager.book_job[book.id])
+                )
+
+        if dmm_session:
+            for subcriber in CronJobManager.book_job[book.id]:
+                subcriber['bot'].send_message(
+                    chat_id = subcriber['user'].id,
+                    text = 'START DOWNLOADING!'
+                )
+                #TODO Start downloading pages.
+        else:
+            CronJobManager.logger.info('Unable to start the download of ' \
+                + 'book %s', book.id)
+            for subcriber in CronJobManager.book_job[book.id]:
+                user = subcriber['user']
+                CronJobManager.logger.info('Sending download error message ' \
+                    + 'to subscriber %s', user.id)
+                subcriber['bot'].send_message(
+                    chat_id = user.id,
+                    text = 'UNABLE TO FUCKING DOWNLOAD THE BOOK!'
+                )
+
+        db_manager.set_volume_now_downloading(db_session, book.id, False)
 
     @staticmethod
     def get_instance():

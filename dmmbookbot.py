@@ -39,11 +39,13 @@ def main():
     config_handler = ConfigWizard(
         lang,
         language_codes,
-        intro_wizard_handler.get_final_stage_num()
+        intro_wizard_handler.get_final_state_num()
     )
     list_books_handler = ListBookHandler(lang, language_codes)
     search_book_handler = BookSearchHandler(lang)
-    book_download_handler = BookDownloadHandler(Config.DOWNLOAD_PATH)
+    book_download_handler = BookDownloadHandler(
+        Config.DOWNLOAD_PATH, lang, config_handler.get_final_state_num()
+    )
 
     dispatcher.add_handler(intro_wizard_handler)
     dispatcher.add_handler(config_handler)

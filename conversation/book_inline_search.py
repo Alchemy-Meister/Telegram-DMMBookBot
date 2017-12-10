@@ -18,9 +18,9 @@ class BookSearchHandler(InlineQueryHandler):
     def __init__(self, lang):
         self.lang = lang
         self.db_manager = Database.get_instance()
-        InlineQueryHandler.__init__(self, self.inline_query)
+        InlineQueryHandler.__init__(self, self.inline_query, pass_chat_data=True)
 
-    def inline_query(self, bot, update):
+    def inline_query(self, bot, update, chat_data):
         results = []
         user_id = update.inline_query.from_user.id
         query = update.inline_query.query
