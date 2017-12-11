@@ -151,23 +151,27 @@ def get_book_details(session, details_url):
         print(e)
     return details
 
-def get_book_vars(html):
-    soup = BeautifulSoup(html, 'html.parser')
+def get_book_vars(session, book):
+    response = requests.get(book.url, cookies=session.cookies.get_dict())
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-    pattern = re.compile(r'\w+\ *= \"?(.*?)\"?;$', re.MULTILINE | re.DOTALL)
-    script = soup.find("script", text=pattern)
+        pattern = re.compile(r'\w+\ *= \"?(.*?)\"?;$', re.MULTILINE | re.DOTALL)
+        script = soup.find("script", text=pattern)
 
-    book_var_values = []
-    var_ids_size = len(var_ids)
+        book_var_values = []
+        var_ids_size = len(var_ids)
 
-    for index, match in enumerate(pattern.findall(script.text)):
-        if index >= var_ids_size:
-            break
-        book_var_values.append(match.encode().decode('unicode-escape'))
+        for index, match in enumerate(pattern.findall(script.text)):
+            if index >= var_ids_size:
+                break
+            book_var_values.append(match.encode().decode('unicode-escape'))
 
-    return dict(zip(var_ids, book_var_values))
+        return dict(zip(var_ids, book_var_values))
+    return None
 
-def get_image_download_url(book_vars, page):
+
+def get_page_download_url(book_vars, page):
     url_template = '{}/{}/{}-{}.jpg?uid={}'
     return url_template.format(book_vars[var_ids[0]], \
         book_vars[var_ids[1]], book_vars[var_ids[1]], str(page).zfill(4), \
@@ -190,7 +194,7 @@ def download_book(session, book, path):
         book_vars = get_book_vars(response.text)
         num_pages = book_vars[var_ids[5]]
         for page in range(1, int(num_pages) + 1):
-            page_url = get_image_download_url(book_vars, page)
+            page_url = get_page_download_url(book_vars, page)
 
             response = requests.get(page_url, stream=True)
             if response.status_code == 200:

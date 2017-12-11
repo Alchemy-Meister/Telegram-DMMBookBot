@@ -47,7 +47,7 @@ class BookDownloadHandler(ConversationHandler):
         user = self.db_manager.get_user(session, user_id)
         book = self.db_manager.get_volume_by_id(session, book_id)
         book_path = utils.get_book_download_path(self.download_path, book)
-        book_images = utils.get_book_images(book_path)
+        book_images = utils.get_book_page_num_list(book_path)
         missing_images = utils.book_missing_pages(1, book.pages, book_images)
         bot.editMessageReplyMarkup(
             chat_id = None,
@@ -57,6 +57,27 @@ class BookDownloadHandler(ConversationHandler):
         self.logger.info('User %s requested to download book %s',
             user.id, book.id)
         if not missing_images:
+            if user.file_format == FileFormat.pdf:
+                pdf_path = utils.get_book_by_format(book_path, '.pdf')
+                if not pdf_path:
+                    bot.send_message(
+                        chat_id=user.id,
+                        text='Converting images to PDF.'
+                    )
+                    try:
+                        pdf_path = utils.convert_book2pdf(book_path, book)
+                        bot.send_message(
+                            chat_id=user.id,
+                            text='Conversion to PDF finished! Now sending.',
+                        )
+                    except Exception as e:
+                        print(e)
+                        pass   #Conversion error, but this shouldn't happend.
+                bot.send_document(
+                    chat_id=user.id,
+                    document=open(pdf_path, 'rb')
+                )
+
             return ConversationHandler.END
         else:
             if not user.save_credentials:

@@ -9,6 +9,7 @@ import dmm_ripper as dmm
 import logging
 import utilities as utils
 import pytz
+import os
 
 class CronJobManager:
     
@@ -274,12 +275,8 @@ class CronJobManager:
         )
 
     @staticmethod
-    def download_book_pages_job(book_path, missing_images, book):
-        db_manager = Database.get_instance()
-        db_session = db_manager.create_session()
+    def get_dmm_session_for_book_download(book):
         dmm_session = None
-        CronJobManager.logger.info('Starting download job of book %s', book.id)
-        db_manager.set_volume_now_downloading(db_session, book.id, True)
         for index, subcriber in enumerate(CronJobManager.book_job[book.id]):
             user = subcriber['user']
             if subcriber['password']:
@@ -296,14 +293,58 @@ class CronJobManager:
                     + 'account of subscriber %s. Attempt %s out of %s', 
                     user.id, index + 1, len(CronJobManager.book_job[book.id])
                 )
+        return dmm_session
+
+    @staticmethod
+    def download_book_pages_job(book_path, missing_images, book):
+        db_manager = Database.get_instance()
+        db_session = db_manager.create_session()
+        dmm_session = None
+        CronJobManager.logger.info('Starting download job of book %s', book.id)
+        db_manager.set_volume_now_downloading(db_session, book.id, True)
+        dmm_session = CronJobManager.get_dmm_session_for_book_download(book)
 
         if dmm_session:
+            for page_num in missing_images:
+                for subcriber in CronJobManager.book_job[book.id]:
+                    if not subcriber['message']:
+                        subcriber['message'] = subcriber['bot'].send_message(
+                            chat_id = subcriber['user'].id,
+                            text = 'DOWNLOADING!\nPAGE {} out of {}' \
+                                .format(page_num, book.pages)
+                        )
+                    else:
+                        subcriber['bot'].edit_message_text(
+                            'DOWNLOADING!\nPAGE {} out of {}' \
+                                .format(page_num, book.pages),
+                            chat_id=subcriber['user'].id,
+                            message_id=subcriber['message'].message_id
+                        )
+                book_vars = dmm.get_book_vars(dmm_session, book)
+                page_url = dmm.get_page_download_url(book_vars, page_num)
+                dmm.download_image(
+                    page_url, os.path.join(book_path, '{}.jpg'.format(page_num))
+                )
+            CronJobManager.logger.info('Download of book %s has finished',
+                book.id)
             for subcriber in CronJobManager.book_job[book.id]:
                 subcriber['bot'].send_message(
-                    chat_id = subcriber['user'].id,
-                    text = 'START DOWNLOADING!'
+                    chat_id=subcriber['user'].id,
+                    text='DOWNLOAD FINISHED! Converting to PDF'
                 )
-                #TODO Start downloading pages.
+            try:
+                pdf_path = utils.convert_book2pdf(book_path, book)
+                for subcriber in CronJobManager.book_job[book.id]:
+                    subcriber['bot'].send_message(
+                        chat_id=subcriber['user'].id,
+                        text='Conversion to PDF finished! Now sending.'
+                    )
+                    bot.send_document(
+                        chat_id=subcriber['user'].id,
+                        document=open(pdf_path, 'rb')
+                    )
+            except:
+                pass #TODO send conversion error.
         else:
             CronJobManager.logger.info('Unable to start the download of ' \
                 + 'book %s', book.id)
@@ -315,8 +356,10 @@ class CronJobManager:
                     chat_id = user.id,
                     text = 'UNABLE TO FUCKING DOWNLOAD THE BOOK!'
                 )
-
         db_manager.set_volume_now_downloading(db_session, book.id, False)
+        CronJobManager.logger.info('Removing the registration of download ' \
+            + 'job for book %s', book.id)
+        del CronJobManager.book_job[book.id]
 
     @staticmethod
     def get_instance():

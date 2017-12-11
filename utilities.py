@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*-coding:utf-8 -*-
 
+import img2pdf
 import os
 import sys
 import re
@@ -59,6 +60,24 @@ def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
         menu.append(footer_buttons)
     return menu
 
+def get_book_image_paths(path):
+    book_images = []
+    for file in os.listdir(path):
+        if file.endswith('.jpg') and file != 'thumbnail.jpg':
+            book_images.append(os.path.join(path, file))
+    return sorted(book_images, key=lambda x: \
+        int(x.rsplit('/', 1)[1].split('.jpg')[0])
+    )
+
+def get_book_page_num_list(path):
+    book_images = []
+    for file in os.listdir(path):
+        if file.endswith('.jpg') and file != 'thumbnail.jpg':
+            page_num = int(file.split('.jpg')[0])
+            book_images.append(page_num)
+    book_images.sort()
+    return book_images
+
 def book_missing_pages(start_page, end_page, page_list):
     return sorted(set(range(start_page, end_page + 1)).difference(page_list))
 
@@ -70,8 +89,21 @@ def get_book_download_path(base_path, book):
     else:
         return '{}/{}-{}'.format(base_path, book.title, book.id)
 
-def get_book_images(path):
-    return [img for img in os.listdir(path) if img.endswith('.jpg')]
+def convert_book2pdf(path, book):
+    if not book_missing_pages(1, book.pages, get_book_page_num_list(path)):
+        book_pages = get_book_image_paths(path)
+        pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
+        with open(pdf_path, 'wb') as f:
+            f.write(img2pdf.convert(book_pages))
+        return pdf_path
+    else:
+        raise Exception('Book pages missing')
+
+def get_book_by_format(path, format_name):
+    for file in os.listdir(path):
+        if file.endswith(format_name):
+            return os.path.join(path, file)
+    return None
 
 def logging_tz(*args):
     utc_dt = utc.localize(datetime.utcnow())
