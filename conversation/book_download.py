@@ -9,6 +9,10 @@ import os
 class BookDownloadHandler(ConversationHandler):
 
     num_states = 1
+    convert_book = {
+        FileFormat.pdf: utils.convert_book2pdf,
+        FileFormat.epub: utils.convert_book2epub
+    }
 
     def __init__(self, download_path, lang, initial_state):
         self.db_manager = Database.get_instance()
@@ -37,7 +41,6 @@ class BookDownloadHandler(ConversationHandler):
             fallbacks=self.fallbacks,
             per_chat=False
         )
-        self.callback_handler = CallbackQueryHandler(self.request_download_book)
 
     def request_download_book(self, bot, update, user_data):
         query = update.callback_query
@@ -49,34 +52,48 @@ class BookDownloadHandler(ConversationHandler):
         book_path = utils.get_book_download_path(self.download_path, book)
         book_images = utils.get_book_page_num_list(book_path)
         missing_images = utils.book_missing_pages(1, book.pages, book_images)
+        self.logger.info('User %s requested to download book %s',
+            user.id, book.id)
+        self.logger.info('Removing download button of inline query of ' \
+            + 'book %s for user %s', book.id, user.id)
         bot.editMessageReplyMarkup(
             chat_id = None,
             inline_message_id = query.inline_message_id,
             reply_markup=None
         )
-        self.logger.info('User %s requested to download book %s',
-            user.id, book.id)
         if not missing_images:
+            self.logger.info('All the book %s pages are available in local ' \
+                + 'storage', book.id)
             if user.file_format == FileFormat.pdf:
-                pdf_path = utils.get_book_by_format(book_path, '.pdf')
-                if not pdf_path:
-                    bot.send_message(
-                        chat_id=user.id,
-                        text='Converting images to PDF.'
-                    )
-                    try:
-                        pdf_path = utils.convert_book2pdf(book_path, book)
-                        bot.send_message(
-                            chat_id=user.id,
-                            text='Conversion to PDF finished! Now sending.',
-                        )
-                    except Exception as e:
-                        print(e)
-                        pass   #Conversion error, but this shouldn't happend.
-                bot.send_document(
+                preferred_format = FileFormat(FileFormat.pdf).name
+            elif user.file_format == FileFormat.epub:
+                preferred_format = FileFormat(FileFormat.epub).name
+            format_file_path = utils.get_book_by_format(
+                book_path, '.{}'.format(preferred_format.lower())
+            )
+            if not format_file_path:
+                self.logger.info('%s book not available in %s format', book.id,
+                    preferred_format)
+                self.logger.info('Sending %s book conversion start message ' \
+                    + 'to user %s', book.id, user.id)
+                bot.send_message(
                     chat_id=user.id,
-                    document=open(pdf_path, 'rb')
+                    text='Converting book pages to {}.'.format(preferred_format)
                 )
+                format_file_path = BookDownloadHandler \
+                    .convert_book[user.file_format](book_path, book)
+                bot.send_message(
+                    chat_id=user.id,
+                    text='Conversion to {} finished! Now sending.' \
+                        .format(preferred_format)
+                )
+            self.logger.info('Sending book %s in %s format to user %s', 
+                book.id, preferred_format, user.id)
+            bot.send_document(
+                chat_id=user.id,
+                document=open(format_file_path, 'rb'),
+                timeout=60
+            )
 
             return ConversationHandler.END
         else:

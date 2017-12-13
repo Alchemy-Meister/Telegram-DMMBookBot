@@ -75,6 +75,7 @@ class Manga(Base):
 class Database():
 
     db_schema_name = Config.DATABASE
+    logger = logging.getLogger(__name__)
     __instance = None
 
     def __init__(self):
@@ -94,12 +95,12 @@ class Database():
                     autoflush=True
                 )
             )
-            self.logger = logging.getLogger(__name__)
             Database.__instance = self
 
     @staticmethod
     def get_instance():
         if Database.__instance == None:
+            Database.logger.info('Database singleton instantiated')
             Database()
         return Database.__instance
 
@@ -158,7 +159,7 @@ class Database():
             .all()
 
     def insert_user(self, session, user_id):
-        self.logger.info('saving new user %s into DB', user_id)
+        Database.logger.info('saving new user %s into DB', user_id)
         session.add(User(id=user_id))
         session.commit()
 
@@ -169,57 +170,60 @@ class Database():
         session.commit()
 
     def set_user_language(self, session, user_id, language_code):
-        self.logger.info('Updating the language for user %s', user_id)
+        Database.logger.info('Updating the language for user %s', user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'language_code': language_code})
         session.commit()
 
     def set_user_email(self, session, user_id, email):
-        self.logger.info('Updating the email for user %s', user_id)
+        Database.logger.info('Updating the email for user %s', user_id)
         session.query(User).filter_by(id=user_id).update({'email': email})
         session.commit()
 
     def set_save_credentials(self, session, user_id, save_credentials):
-        self.logger.info('Updating the credential preference for user %s',
+        Database.logger.info('Updating the credential preference for user %s',
             user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'save_credentials': save_credentials})
         session.commit()
 
     def set_user_password(self, session, user_id, password):
-        self.logger.info('Updating the password for user %s', user_id)
+        Database.logger.info('Updating the password for user %s', user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'password': password})
         session.commit()
 
     def set_user_file_format(self, session, user_id, file_format):
-        self.logger.info('Updating the file format preference for user %s',
+        Database.logger.info('Updating the file format preference for user %s',
             user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'file_format': file_format})
         session.commit()
 
     def set_user_cache_expire_date(self, session, user_id, cache_expire_date):
-        self.logger.info('Updating the cache expiration date for user %s',
+        Database.logger.info('Updating the cache expiration date for user %s',
             user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'cache_expire_date': cache_expire_date})
         session.commit()
 
     def set_user_now_caching(self, session, user_id, now_caching):
-        self.logger.info('Updating the now caching flag for user %s', user_id)
+        Database.logger.info('Updating the now caching flag for user %s',
+            user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'now_caching': now_caching})
         session.commit()
 
     def set_user_cache_built(self, session, user_id, cache_built):
-        self.logger.info('Updating the cache built flag for user %s', user_id)
+        Database.logger.info('Updating the cache built flag for user %s',
+            user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'cache_built': cache_built})
         session.commit()
 
     def set_user_login_error(self, session, user_id, login_error):
-        self.logger.info('Updating the logging error flag for user %s', user_id)
+        Database.logger.info('Updating the logging error flag for user %s',
+            user_id)
         session.query(User).filter_by(id=user_id) \
             .update({'login_error': login_error})
         session.commit()
@@ -239,7 +243,7 @@ class Database():
         return session.query(Manga).filter(Manga.id == volume_id).first()
 
     def set_volume_now_downloading(self, session, volume_id, now_downloading):
-        self.logger.info(
+        Database.logger.info(
             'Updating the now downloading flag for volume %s', volume_id
         )
         session.query(Manga).filter_by(id=volume_id) \

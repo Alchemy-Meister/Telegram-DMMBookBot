@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" xml:lang="en" unique-identifier="pub-id" prefix="cc: http://creativecommons.org/ns#">
+  <metadata xmlns:opf="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <meta property="dcterms:modified"/>
+    <meta name="cover" content="cover"/>
+    <meta property="rendition:layout">reflowable</meta>
+    <dc:title/>
+    <dc:creator/>
+    <dc:date/>
+    <dc:identifier id="pub-id"></dc:identifier>
+    <dc:language/>
+  </metadata>
+  <manifest>
+    <item href="stylesheet.css" id="stylesheet" media-type="text/css"/>
+    <item id="toc" properties="nav" href="toc.xhtml" media-type="application/xhtml+xml"/>
+    <item href="cover.png" id="cover" media-type="image/png" properties="cover-image"/>
+  </manifest>
+  <spine/>
+</package>

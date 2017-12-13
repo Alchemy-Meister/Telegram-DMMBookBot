@@ -7,6 +7,9 @@ import sys
 import re
 import dmm_ripper as dmm
 from datetime import datetime
+from epub_converter import Book
+from io import BytesIO
+from PIL import Image
 from pytz import timezone, utc
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -90,14 +93,30 @@ def get_book_download_path(base_path, book):
         return '{}/{}-{}'.format(base_path, book.title, book.id)
 
 def convert_book2pdf(path, book):
-    if not book_missing_pages(1, book.pages, get_book_page_num_list(path)):
-        book_pages = get_book_image_paths(path)
-        pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
-        with open(pdf_path, 'wb') as f:
-            f.write(img2pdf.convert(book_pages))
-        return pdf_path
-    else:
-        raise Exception('Book pages missing')
+    book_pages = get_book_image_paths(path)
+    pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
+    with open(pdf_path, 'wb') as f:
+        f.write(img2pdf.convert(book_pages))
+    return pdf_path
+
+def convert_book2epub(path, book):
+    book_pages = get_book_image_paths(path)
+    epub_path = os.path.join(path, '{}.epub'.format(book.title))
+    book = Book(title=book.title)
+    for index, page in enumerate(book_pages):
+        if not index:
+            temp_cover = BytesIO()
+            with Image.open(page) as img:
+                img.save(temp_cover, format="png")
+            temp_cover.name = page.rsplit('/', 1)[1]
+            temp_cover.seek(0)
+            book.add_cover(temp_cover.read())
+        else:
+            with open(page, 'br') as file:
+                book.add_image_page(page.rsplit('/', 1)[1], file.read())
+    book.save(epub_path)
+    return epub_path
+
 
 def get_book_by_format(path, format_name):
     for file in os.listdir(path):

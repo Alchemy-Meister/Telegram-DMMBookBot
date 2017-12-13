@@ -307,7 +307,7 @@ class CronJobManager:
         if dmm_session:
             for page_num in missing_images:
                 for subcriber in CronJobManager.book_job[book.id]:
-                    if not subcriber['message']:
+                    if 'message' not in subcriber:
                         subcriber['message'] = subcriber['bot'].send_message(
                             chat_id = subcriber['user'].id,
                             text = 'DOWNLOADING!\nPAGE {} out of {}' \
@@ -332,19 +332,18 @@ class CronJobManager:
                     chat_id=subcriber['user'].id,
                     text='DOWNLOAD FINISHED! Converting to PDF'
                 )
-            try:
-                pdf_path = utils.convert_book2pdf(book_path, book)
-                for subcriber in CronJobManager.book_job[book.id]:
-                    subcriber['bot'].send_message(
-                        chat_id=subcriber['user'].id,
-                        text='Conversion to PDF finished! Now sending.'
-                    )
-                    bot.send_document(
-                        chat_id=subcriber['user'].id,
-                        document=open(pdf_path, 'rb')
-                    )
-            except:
-                pass #TODO send conversion error.
+            pdf_path = utils.convert_book2pdf(book_path, book)
+            for subcriber in CronJobManager.book_job[book.id]:
+                bot = subcriber['bot']
+                bot.send_message(
+                    chat_id=subcriber['user'].id,
+                    text='Conversion to PDF finished! Now sending.'
+                )
+                bot.send_document(
+                    chat_id=subcriber['user'].id,
+                    document=open(pdf_path, 'rb'),
+                    timeout=60
+                )
         else:
             CronJobManager.logger.info('Unable to start the download of ' \
                 + 'book %s', book.id)

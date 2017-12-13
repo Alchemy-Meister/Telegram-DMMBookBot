@@ -1,3 +1,4 @@
+arrow
 APScheduler
 beautifulsoup4
 img2pdf
