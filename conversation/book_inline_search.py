@@ -71,4 +71,4 @@ class BookSearchHandler(InlineQueryHandler):
                 )
             )
         self.db_manager.remove_session()
-        update.inline_query.answer(results)
+        update.inline_query.answer(results, is_personal=True)

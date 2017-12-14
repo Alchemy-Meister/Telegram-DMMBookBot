@@ -9,10 +9,6 @@ import os
 class BookDownloadHandler(ConversationHandler):
 
     num_states = 1
-    convert_book = {
-        FileFormat.pdf: utils.convert_book2pdf,
-        FileFormat.epub: utils.convert_book2epub
-    }
 
     def __init__(self, download_path, lang, initial_state):
         self.db_manager = Database.get_instance()
@@ -78,14 +74,25 @@ class BookDownloadHandler(ConversationHandler):
                     + 'to user %s', book.id, user.id)
                 bot.send_message(
                     chat_id=user.id,
-                    text='Converting book pages to {}.'.format(preferred_format)
+                    text=self.lang[user.language_code]['start_conversion'] \
+                        .format(book.title, preferred_format.upper())
                 )
-                format_file_path = BookDownloadHandler \
-                    .convert_book[user.file_format](book_path, book)
+                format_file_path = utils.convert_book(
+                    user.file_format, book_path, book
+                )
+                self.logger.info('Sending %s book transmission start message ' \
+                    + 'to user %s', book.id, user.id)
                 bot.send_message(
                     chat_id=user.id,
-                    text='Conversion to {} finished! Now sending.' \
-                        .format(preferred_format)
+                    text=self.lang[user.language_code]['conversion_and_send']
+                )
+            else:
+                self.logger.info('Sending %s book transmission start message ' \
+                    + 'to user %s', book.id, user.id)
+                bot.send_message(
+                    chat_id=user.id,
+                    text=self.lang[user.language_code]['sending_book'] \
+                        .format(book.title)
                 )
             self.logger.info('Sending book %s in %s format to user %s', 
                 book.id, preferred_format, user.id)
@@ -94,7 +101,6 @@ class BookDownloadHandler(ConversationHandler):
                 document=open(format_file_path, 'rb'),
                 timeout=60
             )
-
             return ConversationHandler.END
         else:
             if not user.save_credentials:

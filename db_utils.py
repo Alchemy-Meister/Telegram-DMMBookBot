@@ -5,20 +5,15 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (scoped_session, relationship, sessionmaker,
     contains_eager)
 from sqlalchemy import create_engine
+from constants import FileFormat
 from datetime import datetime
 from config import Config
-import enum
 import logging
 import os
 import sys
 import utilities as utils
  
 Base = declarative_base()
-
-class FileFormat(enum.Enum):
-    jpg = 0
-    pdf = 1
-    epub = 2
 
 user_manga_table = Table('user_manga', Base.metadata,
     Column('user_id', Integer, ForeignKey('user.id')),

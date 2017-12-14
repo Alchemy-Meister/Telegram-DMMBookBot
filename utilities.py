@@ -2,15 +2,19 @@
 # -*-coding:utf-8 -*-
 
 import img2pdf
+import logging
 import os
 import sys
 import re
 import dmm_ripper as dmm
+from constants import FileFormat
 from datetime import datetime
 from epub_converter import Book
 from io import BytesIO
 from PIL import Image
 from pytz import timezone, utc
+
+logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CWD = os.getcwd()
@@ -92,14 +96,21 @@ def get_book_download_path(base_path, book):
     else:
         return '{}/{}-{}'.format(base_path, book.title, book.id)
 
+def convert_book(user_format, path, book):
+    return {
+        FileFormat.pdf: convert_book2pdf,
+        FileFormat.epub: convert_book2epub
+    }[user_format](path, book)
+
 def convert_book2pdf(path, book):
-    book_pages = get_book_image_paths(path)
+    logger.info('Creating pdf from %s book\'s images', book.id)
     pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
     with open(pdf_path, 'wb') as f:
         f.write(img2pdf.convert(book_pages))
     return pdf_path
 
 def convert_book2epub(path, book):
+    logger.info('Creating epub from %s book\'s images', book.id)
     book_pages = get_book_image_paths(path)
     epub_path = os.path.join(path, '{}.epub'.format(book.title))
     book = Book(title=book.title)

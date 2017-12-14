@@ -104,8 +104,6 @@ class Book:
 
     def add_page(self, title, content, parent=None):
         """Add a new page/chapter to the root of the book."""
-        log.info('New page: {}'.format(title))
-
         page = Page(next(self.uid_generator), title, [])
         self.root.append(page) if not parent else parent.children.append(page)
 
@@ -118,8 +116,6 @@ class Book:
     def add_image_page(self, name, data, parent=None):
         self.add_image(name, data)
         """Add a new page/chapter to the root of the book."""
-        log.info('New image page: {}'.format(name))
-
         page = Page(next(self.uid_generator), name, [])
         self.root.append(page) if not parent else parent.children.append(page)
         file = template(os.path.join(BASE, 'page.xhtml'))
@@ -133,7 +129,6 @@ class Book:
         return page
 
     def add_image(self, name, data):
-        log.info('New image: {}'.format(name))
         if name.endswith('.jpg'):
             media_type = 'image/jpeg'
         if name.endswith('.png'):
@@ -188,8 +183,11 @@ class Book:
                 properties = 'page-spread-left'
 
             lxml.etree.SubElement(
-                spine('opf:spine'), 'itemref', idref='page{}'.format(page.uid),
-                properties=properties)
+                spine('opf:spine'),
+                'itemref',
+                idref='page{}'.format(page.uid),
+                properties=properties
+            )
 
         for uid, image in enumerate(self.images):
             lxml.etree.SubElement(
