@@ -64,16 +64,23 @@ class BookDownloadHandler(ConversationHandler):
                 preferred_format = FileFormat(FileFormat.pdf).name
             elif user.file_format == FileFormat.epub:
                 preferred_format = FileFormat(FileFormat.epub).name
-            format_file_path = utils.get_book_by_format(
+            file_format_path = utils.get_book_by_format(
                 book_path, '.{}'.format(preferred_format.lower())
             )
-            if format_file_path:
+            if file_format_path:
                 self.logger.info('Sending %s book transmission start message ' \
                     + 'to user %s', book.id, user.id)
                 bot.send_message(
                     chat_id=user.id,
                     text=self.lang[user.language_code]['sending_book'] \
                         .format(book.title)
+                )
+                self.logger.info('Sending book %s in %s format to ' \
+                + 'user %s', book.id, preferred_format, user.id)
+                bot.send_document(
+                    chat_id=user.id,
+                    document=open(file_format_path, 'rb'),
+                    timeout=60
                 )
             else:
                 self.logger.info('%s book not available in %s format', book.id,
