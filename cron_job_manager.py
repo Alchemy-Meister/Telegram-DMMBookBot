@@ -5,6 +5,7 @@ from apscheduler.executors.pool import ProcessPoolExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 from db_utils import Database, User, Manga, MangaSeries
+from constants import FileFormat
 import dmm_ripper as dmm
 import logging
 import utilities as utils
@@ -20,6 +21,7 @@ class CronJobManager:
     download_path = utils.get_abs_path('./downloads')
     jobs = {}
     book_job = {}
+    lang = None
     logger = logging.getLogger(__name__)
 
     def __init__(self):
@@ -251,18 +253,61 @@ class CronJobManager:
             db_manager.set_user_now_caching(db_session, user.id, False)
             db_manager.remove_session()
 
+    def register_book_job(self, book):
+        CronJobManager.logger.info('Registering the job request of ' \
+                + 'for book %s', book.id)
+        formats = [e for e in FileFormat]
+        format_dict = dict(
+            (format_id,[]) for format_id in formats
+        )
+        CronJobManager.book_job[book.id] = {
+            'download': [],
+            'conversion': format_dict
+        }
+
     def subcribe_to_book_download(self, book, user, bot, update, password=None):
         if book.id not in CronJobManager.book_job:
-            CronJobManager.logger.info('Registering the download request of ' \
-                + 'book %s', book.id)
-            CronJobManager.book_job[book.id] = []
+            self.register_book_job(book)
         if not any(job['user'].id == user.id \
-            for job in CronJobManager.book_job[book.id]):
+            for job in CronJobManager.book_job[book.id]['download']):
             CronJobManager.logger.info('Subscribing user %s to download job ' \
                 + 'of book %s', user.id, book.id)
-            CronJobManager.book_job[book.id].append(
-                {'user': user, 'password': password, 'bot': bot, 'chat': update}
+            CronJobManager.book_job[book.id]['download'].append(
+                {'user': user, 'password': password, 'bot': bot}
             )
+
+    def subscribe_to_book_conversion(self, book, book_path, user, bot,
+        from_download=False):
+        
+        execute_job = False
+        file_format = None
+        if book.id not in CronJobManager.book_job:
+            self.register_book_job(book)
+
+        if not any(job['user'].id == user.id for job in \
+            CronJobManager.book_job[book.id]['conversion'][user.file_format]):
+            
+            CronJobManager.logger.info('Subscribing user %s to %s conversion ' \
+                + 'job of book %s', user.id, FileFormat(user.file_format).name,
+                book.id
+            )
+            if not len(CronJobManager.book_job[book.id]['conversion'] \
+                [user.file_format]):
+                execute_job = True
+                file_format = user.file_format
+            CronJobManager.book_job[book.id]['conversion'][user.file_format] \
+                .append({
+                    'user': user,
+                    'bot': bot
+                }
+            )
+            if execute_job:
+                self.scheduler.add_job(
+                    CronJobManager.__instance.convert_book_job,
+                    args=[book_path, book, file_format],
+                    kwargs={'from_download': from_download}
+                )   
+
 
     def download_book_pages(self, book_path, missing_images, book, user,
         bot, update, password=None):
@@ -277,7 +322,9 @@ class CronJobManager:
     @staticmethod
     def get_dmm_session_for_book_download(book):
         dmm_session = None
-        for index, subcriber in enumerate(CronJobManager.book_job[book.id]):
+        for index, subcriber in enumerate(
+            CronJobManager.book_job[book.id]['download']):
+            
             user = subcriber['user']
             if subcriber['password']:
                 password = subcriber['password']
@@ -291,7 +338,9 @@ class CronJobManager:
             except Exception as e:
                 CronJobManager.logger.info('Unable to login to the DMM ' \
                     + 'account of subscriber %s. Attempt %s out of %s', 
-                    user.id, index + 1, len(CronJobManager.book_job[book.id])
+                    user.id,
+                    index + 1,
+                    len(CronJobManager.book_job[book.id]['download'])
                 )
         return dmm_session
 
@@ -306,7 +355,7 @@ class CronJobManager:
 
         if dmm_session:
             for page_num in missing_images:
-                for subcriber in CronJobManager.book_job[book.id]:
+                for subcriber in CronJobManager.book_job[book.id]['download']:
                     if 'message' not in subcriber:
                         subcriber['message'] = subcriber['bot'].send_message(
                             chat_id = subcriber['user'].id,
@@ -327,22 +376,14 @@ class CronJobManager:
                 )
             CronJobManager.logger.info('Download of book %s has finished',
                 book.id)
-            for subcriber in CronJobManager.book_job[book.id]:
-                subcriber['bot'].send_message(
-                    chat_id=subcriber['user'].id,
+            for subscriber in CronJobManager.book_job[book.id]['download']:
+                subscriber['bot'].send_message(
+                    chat_id=subscriber['user'].id,
                     text='DOWNLOAD FINISHED! Converting to PDF'
                 )
-            pdf_path = utils.convert_book2pdf(book_path, book)
-            for subcriber in CronJobManager.book_job[book.id]:
-                bot = subcriber['bot']
-                bot.send_message(
-                    chat_id=subcriber['user'].id,
-                    text='Conversion to PDF finished! Now sending.'
-                )
-                bot.send_document(
-                    chat_id=subcriber['user'].id,
-                    document=open(pdf_path, 'rb'),
-                    timeout=60
+                CronJobManager.__instance.subscribe_to_book_conversion( \
+                    book, book_path, subscriber['user'], subscriber['bot'], \
+                    from_download=True
                 )
         else:
             CronJobManager.logger.info('Unable to start the download of ' \
@@ -358,11 +399,54 @@ class CronJobManager:
         db_manager.set_volume_now_downloading(db_session, book.id, False)
         CronJobManager.logger.info('Removing the registration of download ' \
             + 'job for book %s', book.id)
-        del CronJobManager.book_job[book.id]
+        CronJobManager.book_job[book.id]['download'] = []
 
     @staticmethod
-    def get_instance():
+    def convert_book_job(book_path, book, file_format, from_download=None):
+        preferred_format = FileFormat(file_format).name
+        CronJobManager.logger.info('Starting conversion job of book ' \
+            + '%s to %s', book.id, preferred_format)
+        if not from_download:
+            for subscriber in CronJobManager.book_job[book.id]['conversion'] \
+                [file_format]:
+                
+                user = subscriber['user']
+                CronJobManager.logger.info('Sending %s book conversion start ' \
+                    + 'message to user %s', book.id, user.id)
+                subscriber['bot'].send_message(
+                    chat_id=user.id,
+                    text=CronJobManager.lang[user.language_code] \
+                    ['start_conversion'].format(
+                        book.title, preferred_format.upper()
+                    )
+                )
+        file_format_path = utils.convert_book(file_format, book_path, book)
+        for subscriber in CronJobManager.book_job[book.id]['conversion'] \
+            [file_format]:
+            
+            bot = subscriber['bot']
+            user = subscriber['user']
+            CronJobManager.logger.info('Sending %s book transmission start '
+                + 'message to user %s', book.id, user.id)
+            bot.send_message(
+                chat_id=user.id,
+                text=CronJobManager.lang[user.language_code] \
+                    ['conversion_and_send']
+            )
+            CronJobManager.logger.info('Sending book %s in %s format to ' \
+                + 'user %s', book.id, preferred_format, user.id)
+            bot.send_document(
+                chat_id=user.id,
+                document=open(file_format_path, 'rb'),
+                timeout=60
+            )
+        CronJobManager.book_job[book.id]['conversion'][file_format] = []
+
+    @staticmethod
+    def get_instance(languages=None):
         if CronJobManager.__instance == None:
+            if languages:
+                CronJobManager.lang = languages
             CronJobManager()
             CronJobManager.logger.info('CronJobManager singleton instanciated')
             session = CronJobManager.__instance.db_manager.create_session()

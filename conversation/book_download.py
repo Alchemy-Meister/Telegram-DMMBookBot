@@ -67,26 +67,7 @@ class BookDownloadHandler(ConversationHandler):
             format_file_path = utils.get_book_by_format(
                 book_path, '.{}'.format(preferred_format.lower())
             )
-            if not format_file_path:
-                self.logger.info('%s book not available in %s format', book.id,
-                    preferred_format)
-                self.logger.info('Sending %s book conversion start message ' \
-                    + 'to user %s', book.id, user.id)
-                bot.send_message(
-                    chat_id=user.id,
-                    text=self.lang[user.language_code]['start_conversion'] \
-                        .format(book.title, preferred_format.upper())
-                )
-                format_file_path = utils.convert_book(
-                    user.file_format, book_path, book
-                )
-                self.logger.info('Sending %s book transmission start message ' \
-                    + 'to user %s', book.id, user.id)
-                bot.send_message(
-                    chat_id=user.id,
-                    text=self.lang[user.language_code]['conversion_and_send']
-                )
-            else:
+            if format_file_path:
                 self.logger.info('Sending %s book transmission start message ' \
                     + 'to user %s', book.id, user.id)
                 bot.send_message(
@@ -94,13 +75,11 @@ class BookDownloadHandler(ConversationHandler):
                     text=self.lang[user.language_code]['sending_book'] \
                         .format(book.title)
                 )
-            self.logger.info('Sending book %s in %s format to user %s', 
-                book.id, preferred_format, user.id)
-            bot.send_document(
-                chat_id=user.id,
-                document=open(format_file_path, 'rb'),
-                timeout=60
-            )
+            else:
+                self.logger.info('%s book not available in %s format', book.id,
+                    preferred_format)
+                self.scheduler.subscribe_to_book_conversion(book, book_path, \
+                    user, bot, from_download=False)
             return ConversationHandler.END
         else:
             if not user.save_credentials:

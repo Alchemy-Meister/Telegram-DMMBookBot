@@ -29,7 +29,7 @@ def main():
     language_codes = {'en': ['english', '英語'], 'ja': ['japanese','日本語']}
 
     db_manager = Database.get_instance()
-    scheduler = CronJobManager.get_instance()
+    scheduler = CronJobManager.get_instance(languages=lang)
     scheduler.set_download_path(Config.DOWNLOAD_PATH)
 
     updater = Updater(Config.TOKEN)
