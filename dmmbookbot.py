@@ -12,7 +12,6 @@ from db_utils import Database
 from languages import common, english, japanese
 from config import Config
 import logging
-import json
 import utilities as utils
 
 logging.basicConfig(
@@ -20,9 +19,6 @@ logging.basicConfig(
     level=logging.INFO)
 logging.Formatter.converter = utils.logging_tz
 logger = logging.getLogger(__name__)
-
-def inline_result(bot, update):
-    print(update)
 
 def main():
     lang = {'en': english.en, 'ja': japanese.ja, 'common': common.common}
