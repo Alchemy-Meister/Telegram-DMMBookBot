@@ -1,20 +1,21 @@
 from telegram.ext import CallbackQueryHandler, ConversationHandler, RegexHandler
-from telegram import KeyboardButton
+from telegram import KeyboardButton, ParseMode
 from db_utils import Database, FileFormat
 from cron_job_manager import CronJobManager
+from os import path
 import logging
 import utilities as utils
-import os
 
 class BookDownloadHandler(ConversationHandler):
 
     num_states = 1
 
-    def __init__(self, download_path, lang, initial_state):
+    def __init__(self, max_download_size, download_path, lang, initial_state):
         self.db_manager = Database.get_instance()
         self.scheduler = CronJobManager.get_instance()
         self.logger = logging.getLogger(__name__)
         self.download_path = utils.get_abs_path(download_path)
+        self.max_download_size = max_download_size
         self.lang = lang
         self.initial_state = initial_state
         self.PROCESS_PASSWORD = range(
@@ -68,20 +69,28 @@ class BookDownloadHandler(ConversationHandler):
                 book_path, '.{}'.format(preferred_format.lower())
             )
             if file_format_path:
-                self.logger.info('Sending %s book transmission start message ' \
-                    + 'to user %s', book.id, user.id)
-                bot.send_message(
-                    chat_id=user.id,
-                    text=self.lang[user.language_code]['sending_book'] \
-                        .format(book.title)
-                )
-                self.logger.info('Sending book %s in %s format to ' \
-                + 'user %s', book.id, preferred_format, user.id)
-                bot.send_document(
-                    chat_id=user.id,
-                    document=open(file_format_path, 'rb'),
-                    timeout=60
-                )
+                if path.getsize(file_format_path) >= CronJobManager.max_upload_size:
+                    bot.send_message(chat_id=user.id,
+                        text=self.lang[user.language_code]['generate_url']
+                    )
+                    self.scheduler.generante_storage_url(
+                        file_format_path, preferred_format, bot, user
+                    )
+                else:
+                    self.logger.info('Sending %s book transmission start ' \
+                        + 'message to user %s', book.id, user.id)
+                    bot.send_message(
+                        chat_id=user.id,
+                        text=self.lang[user.language_code]['sending_book'] \
+                            .format(book.title)
+                    )
+                    self.logger.info('Sending book %s in %s format to ' \
+                        + 'user %s', book.id, preferred_format, user.id)
+                    bot.send_document(
+                        chat_id=user.id,
+                        document=open(file_format_path, 'rb'),
+                        timeout=60
+                    )
             else:
                 self.logger.info('%s book not available in %s format', book.id,
                     preferred_format)

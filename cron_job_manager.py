@@ -5,12 +5,15 @@ from apscheduler.executors.pool import ProcessPoolExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 from db_utils import Database, User, Manga, MangaSeries
+from cloud.sendclient import upload
 from constants import FileFormat
+from telegram import ParseMode
+from uguuAPI import uploadfile
 import dmm_ripper as dmm
 import logging
 import utilities as utils
 import pytz
-import os
+from os import path
 
 class CronJobManager:
     
@@ -23,6 +26,7 @@ class CronJobManager:
     book_job = {}
     lang = None
     logger = logging.getLogger(__name__)
+    max_upload_size = None
 
     def __init__(self):
 
@@ -265,7 +269,7 @@ class CronJobManager:
             'conversion': format_dict
         }
 
-    def subcribe_to_book_download(self, book, user, bot, update, password=None):
+    def subscribe_to_book_download(self, book, user, bot, update, password=None):
         if book.id not in CronJobManager.book_job:
             self.register_book_job(book)
         if not any(job['user'].id == user.id \
@@ -311,7 +315,7 @@ class CronJobManager:
 
     def download_book_pages(self, book_path, missing_images, book, user,
         bot, update, password=None):
-        self.subcribe_to_book_download(
+        self.subscribe_to_book_download(
             book, user, bot, update, password=password
         )
         self.scheduler.add_job(
@@ -322,17 +326,17 @@ class CronJobManager:
     @staticmethod
     def get_dmm_session_for_book_download(book):
         dmm_session = None
-        for index, subcriber in enumerate(
+        for index, subscriber in enumerate(
             CronJobManager.book_job[book.id]['download']):
             
-            user = subcriber['user']
-            if subcriber['password']:
-                password = subcriber['password']
+            user = subscriber['user']
+            if subscriber['password']:
+                password = subscriber['password']
             else:
                 password = user.password
             try:
                 CronJobManager.logger.info('Obtaining a new DMM session for ' \
-                    + 'subcriber %s', user.id)
+                    + 'subscriber %s', user.id)
                 dmm_session = dmm.get_session(user.email, password, False)
                 break
             except Exception as e:
@@ -351,35 +355,55 @@ class CronJobManager:
         dmm_session = None
         CronJobManager.logger.info('Starting download job of book %s', book.id)
         db_manager.set_volume_now_downloading(db_session, book.id, True)
+        num_miss_imgs = len(missing_images)
+        for subscriber in CronJobManager.book_job[book.id]['download']:
+            user = subscriber['user']
+            subscriber['message'] = subscriber['bot'].send_message(
+                chat_id = user.id,
+                text = CronJobManager.lang[user.language_code]['downloading'] \
+                    .format(utils.download_progress_bar(
+                        book.pages - num_miss_imgs,
+                        book.pages
+                    )
+                ),
+                parse_mode=ParseMode.HTML
+            )
         dmm_session = CronJobManager.get_dmm_session_for_book_download(book)
 
         if dmm_session:
-            for page_num in missing_images:
-                for subcriber in CronJobManager.book_job[book.id]['download']:
-                    if 'message' not in subcriber:
-                        subcriber['message'] = subcriber['bot'].send_message(
-                            chat_id = subcriber['user'].id,
-                            text = 'DOWNLOADING!\nPAGE {} out of {}' \
-                                .format(page_num, book.pages)
-                        )
-                    else:
-                        subcriber['bot'].edit_message_text(
-                            'DOWNLOADING!\nPAGE {} out of {}' \
-                                .format(page_num, book.pages),
-                            chat_id=subcriber['user'].id,
-                            message_id=subcriber['message'].message_id
-                        )
+            for index, page_num in enumerate(missing_images):
                 book_vars = dmm.get_book_vars(dmm_session, book)
                 page_url = dmm.get_page_download_url(book_vars, page_num)
                 dmm.download_image(
-                    page_url, os.path.join(book_path, '{}.jpg'.format(page_num))
+                    page_url, path.join(book_path, '{}.jpg'.format(page_num))
                 )
+                for subscriber in CronJobManager.book_job[book.id]['download']:
+                    user = subscriber['user']
+                    try:
+                        subscriber['bot'].edit_message_text(
+                            CronJobManager.lang[user.language_code] \
+                            ['downloading'].format(
+                                utils.download_progress_bar(
+                                    book.pages - num_miss_imgs + index + 1,
+                                    book.pages
+                                )
+                            ),
+                            chat_id=user.id,
+                            message_id=subscriber['message'].message_id,
+                            parse_mode=ParseMode.HTML
+                        )
+                    except:
+                        pass # Download percentage not modified
             CronJobManager.logger.info('Download of book %s has finished',
                 book.id)
             for subscriber in CronJobManager.book_job[book.id]['download']:
+                user = subscriber['user']
                 subscriber['bot'].send_message(
-                    chat_id=subscriber['user'].id,
-                    text='DOWNLOAD FINISHED! Converting to PDF'
+                    chat_id=user.id,
+                    text=CronJobManager.lang[user.language_code] \
+                        ['download_finished'].format(
+                            FileFormat(user.file_format).name.upper()
+                        )
                 )
                 CronJobManager.__instance.subscribe_to_book_conversion( \
                     book, book_path, subscriber['user'], subscriber['bot'], \
@@ -388,13 +412,14 @@ class CronJobManager:
         else:
             CronJobManager.logger.info('Unable to start the download of ' \
                 + 'book %s', book.id)
-            for subcriber in CronJobManager.book_job[book.id]:
-                user = subcriber['user']
+            for subscriber in CronJobManager.book_job[book.id]:
+                user = subscriber['user']
                 CronJobManager.logger.info('Sending download error message ' \
                     + 'to subscriber %s', user.id)
-                subcriber['bot'].send_message(
+                subscriber['bot'].send_message(
                     chat_id = user.id,
-                    text = 'UNABLE TO FUCKING DOWNLOAD THE BOOK!'
+                    text = CronJobManager.lang[user.language_code] \
+                        ['download_error']
                 )
         db_manager.set_volume_now_downloading(db_session, book.id, False)
         CronJobManager.logger.info('Removing the registration of download ' \
@@ -409,7 +434,7 @@ class CronJobManager:
         if not from_download:
             for subscriber in CronJobManager.book_job[book.id]['conversion'] \
                 [file_format]:
-                
+
                 user = subscriber['user']
                 CronJobManager.logger.info('Sending %s book conversion start ' \
                     + 'message to user %s', book.id, user.id)
@@ -426,27 +451,61 @@ class CronJobManager:
             
             bot = subscriber['bot']
             user = subscriber['user']
-            CronJobManager.logger.info('Sending %s book transmission start '
-                + 'message to user %s', book.id, user.id)
-            bot.send_message(
-                chat_id=user.id,
-                text=CronJobManager.lang[user.language_code] \
-                    ['conversion_and_send']
-            )
-            CronJobManager.logger.info('Sending book %s in %s format to ' \
-                + 'user %s', book.id, preferred_format, user.id)
-            bot.send_document(
-                chat_id=user.id,
-                document=open(file_format_path, 'rb'),
-                timeout=60
-            )
+            
+            if path.getsize(file_format_path) >= CronJobManager.max_upload_size:
+                url = uploadfile(file_format_path)
+                bot.send_message(chat_id=user.id,
+                    text=CronJobManager.lang[user.language_code]['generate_url']
+                )
+                CronJobManager.__instance.generante_storage_url(
+                    file_format_path, preferred_format, bot, user
+                )
+            else:
+                CronJobManager.logger.info('Sending %s book transmission start '
+                    + 'message to user %s', book.id, user.id)
+                bot.send_message(
+                    chat_id=user.id,
+                    text=CronJobManager.lang[user.language_code] \
+                        ['conversion_and_send']
+                )
+                CronJobManager.logger.info('Sending book %s in %s format to ' \
+                    + 'user %s', book.id, preferred_format, user.id)
+                bot.send_document(
+                    chat_id=user.id,
+                    document=open(file_format_path, 'rb'),
+                    timeout=60
+                )
         CronJobManager.book_job[book.id]['conversion'][file_format] = []
 
+    def generante_storage_url(self, file_path, preferred_format, bot, user):
+        self.scheduler.add_job(
+            CronJobManager.__instance.generante_storage_url_job,
+            args=[file_path, preferred_format, bot, user]
+        )
+    
     @staticmethod
-    def get_instance(languages=None):
+    def generante_storage_url_job(file_path, preferred_format, bot, user):
+        secretUrl, delete_token = upload.send_file(
+            'https://send.firefox.com/', open(file_path, 'rb'),
+            ignoreVersion=False,
+            fileName='{}.{}'.format(
+                utils.random_string(32),
+                preferred_format)
+            )
+        bot.send_message(chat_id=user.id,
+            text=CronJobManager.lang[user.language_code]['url_send'] \
+                .format(secretUrl),
+            disable_web_page_preview=True,
+            parse_mode=ParseMode.HTML
+        )
+
+    @staticmethod
+    def get_instance(languages=None, max_upload_size=None):
         if CronJobManager.__instance == None:
             if languages:
                 CronJobManager.lang = languages
+            if max_upload_size:
+                CronJobManager.max_upload_size = max_upload_size
             CronJobManager()
             CronJobManager.logger.info('CronJobManager singleton instanciated')
             session = CronJobManager.__instance.db_manager.create_session()

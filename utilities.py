@@ -4,7 +4,9 @@
 import img2pdf
 import logging
 import os
+import string
 import sys
+import random
 import re
 import dmm_ripper as dmm
 from constants import FileFormat
@@ -18,6 +20,11 @@ logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CWD = os.getcwd()
+
+def random_string(length):
+    return ''.join(random.SystemRandom().choice( \
+        string.ascii_uppercase + string.digits) for _ in range(length)
+    )
 
 def dir_exists(dir_name):
     return os.path.exists(get_abs_path(dir_name))
@@ -34,7 +41,6 @@ def create_dir(dir_name):
         os.makedirs(dir_name)
 
 def callback_command(command):
-    print('{{"command":"{0}"}}'.format(command))
     return '{{"command":"{0}"}}'.format(command)
 
 def callback_string(command, value):
@@ -96,6 +102,11 @@ def get_book_download_path(base_path, book):
     else:
         return '{}/{}-{}'.format(base_path, book.title, book.id)
 
+def download_progress_bar(current_page, total_pages):
+    i = current_page / total_pages
+    j = 1 - i
+    return '[{}{}] {:d}%'.format('='*int(20*i), '　'*int(20*j), int(100*i))
+
 def convert_book(user_format, path, book):
     return {
         FileFormat.pdf: convert_book2pdf,
@@ -104,6 +115,7 @@ def convert_book(user_format, path, book):
 
 def convert_book2pdf(path, book):
     logger.info('Creating pdf from %s book\'s images', book.id)
+    book_pages = get_book_image_paths(path)
     pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
     with open(pdf_path, 'wb') as f:
         f.write(img2pdf.convert(book_pages))
@@ -127,7 +139,6 @@ def convert_book2epub(path, book):
                 book.add_image_page(page.rsplit('/', 1)[1], file.read())
     book.save(epub_path)
     return epub_path
-
 
 def get_book_by_format(path, format_name):
     for file in os.listdir(path):
