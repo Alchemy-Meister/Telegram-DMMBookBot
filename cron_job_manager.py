@@ -5,7 +5,7 @@ from apscheduler.executors.pool import ProcessPoolExecutor
 from apscheduler.events import EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 from db_utils import Database, User, Manga, MangaSeries
-from cloud.sendclient import upload
+from sendclient import upload
 from constants import FileFormat
 from telegram import ParseMode
 from uguuAPI import uploadfile
