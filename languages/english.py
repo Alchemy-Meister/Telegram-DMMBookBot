@@ -16,7 +16,7 @@ en = {
 'credentials_enabled': 'OK, I have disabled the storage of your credentials.',
 'credentials_disabled': 'OK, Credential storage has been disabled.',
 'password_removed': 'Your DMM Password has been removed.',
-'checking_credentials': 'I am validating your credentials. Please wait, this may take some time...',
+'checking_credentials': 'I am validating your credentials, refrain from using your DMM account until I finish. Please wait, this may take some time...',
 'invalid_credentials':'Unable to log in to DMM. Please, update your credentials and try again.',
 'long_invalid_credentials': 'Unable to log in to DMM. Please, update your credentials from /config command and try again.',
 'request_password': 'Please, send me your DMM account\'s password:',

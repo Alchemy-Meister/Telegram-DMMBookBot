@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
+import logging
 import re
 import requests
 import sys
@@ -14,8 +15,9 @@ debug = False
 book_url = 'https://book.dmm.com'
 library_url = book_url + '/library/'
 var_ids = ['server', 'book_id', 'license', 'title', 'author', 'pages']
-
 session_cookies = ['login_session_id', 'login_secure_id', 'INT_SESID']
+
+logger = logging.getLogger(__name__)
 
 def get_login_url(fast):
     login_url = 'https://www.dmm.com/my/-/login/' \
@@ -74,47 +76,82 @@ def get_books_list(html):
     books = []
     soup = BeautifulSoup(html, 'html.parser')
 
-    book_list = soup.find('ul', {'class': \
-        'm-boxListBookProductLarge__list'})
+    try:
+        book_list = soup.find('ul', {'class': \
+            'm-boxListBookProductLarge__list'})
 
-    book_divs = book_list.findChildren(attrs={'class': \
-        'm-boxListBookProductBlock__wrap'})
+        book_divs = book_list.findChildren(attrs={'class': \
+            'm-boxListBookProductBlock__wrap'})
 
-    for book_div in book_divs:
-        try:
-            book_link = book_div.findChild(attrs={'class': \
-                'm-boxListBookProductBlock__item'}).findChild()['href']
-            title_div = book_div.findChild(attrs={'class': \
-                'm-boxListBookProductBlock__main__info__ttl'})
-            book_details_url = title_div.findChild()['href']
-            title = title_div.findChild().contents[0]
+        for book_div in book_divs:
+            try:
+                book_link = book_div.findChild(attrs={'class': \
+                    'm-boxListBookProductBlock__item'}).findChild()['href']
+                title_div = book_div.findChild(attrs={'class': \
+                    'm-boxListBookProductBlock__main__info__ttl'})
+                book_details_url = title_div.findChild()['href']
+                title = title_div.findChild().contents[0]
 
-            thumbnail = book_div.findChild(attrs={'class': \
-                'm-boxListBookProductBlock__main__tmb'}).findChild('img')['src']
+                thumbnail = book_div.findChild(
+                    attrs={'class': 'm-boxListBookProductBlock__main__tmb'}
+                ).findChild('img')['src']
 
-            url = book_url + book_link
+                url = book_url + book_link
 
-            books.append({
-                'name': title,
-                'url': url,
-                'details_url': book_details_url,
-                'thumbnail': thumbnail
-            })
-        except:
-            pass
+                books.append({
+                    'name': title,
+                    'url': url,
+                    'details_url': book_details_url,
+                    'thumbnail': thumbnail
+                })
+            except Exception as e:
+                pass # Book not purchased if book_link missing.
+    except Exception as e:
+        raise Exception('No book found.')
 
     return books
 
-def get_purchased_books(session):
+def get_purchased_books(session, max_attempts=5):
     books = []
-    response = requests.get(library_url, cookies=session.cookies.get_dict())
-    if response.status_code == 200:
-        books = get_books_list(response.text)
+    library_end = False
+    page = 1
+    error = False
+    attempt_num = 0
+
+    while not library_end:
+        while (not attempt_num) or (error and attempt_num < max_attempts):
+            response = requests.get(library_url,
+                params={'page': page},
+                cookies=session.cookies.get_dict()
+            )
+            if response.status_code == 200:
+                logger.info('Successfully requested page %d of purchased books',
+                    page)
+                try:
+                    books.extend(get_books_list(response.text))
+                    page += 1
+                    error = False
+                    attempt_num = 0
+                except:
+                    logger.info('Purchased book library ended')
+                    library_end = True
+                    break
+            else:
+                logger.info('Failed to obtain response for page {} of ' \
+                    + 'purchased books, attempt {} out of {}'.format(
+                        page, attempt_num + 1, max_attempts
+                    )
+                )
+                error = True
+                attempt_num += 1
+
+    if error:
+        raise Exception('Unable to obtain all the purchased books')
         
-        for book in books:
-            book['series'] = False
-            if 'series' in book['url']:
-                book['series'] = True
+    for book in books:
+        book['series'] = False
+        if 'series' in book['url']:
+            book['series'] = True
     
     return books
 

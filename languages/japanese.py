@@ -16,7 +16,7 @@ ja = {
 'credentials_enabled': 'オーケー、資格情報の格納を有効にしました。',
 'credentials_disabled': 'オーケー、資格情報の保管を無効にしました。',
 'password_removed': 'DMMパスワードを削除しました。',
-'checking_credentials': '資格情報の検証しています。この操作には時間がかかることがありますので、しばらくお待ちください。',
+'checking_credentials': '資格情報の検証しています。完了するまでDMMアカウントの使用を控えてください。この操作には時間がかかることがありますので、しばらくお待ちください。',
 'invalid_credentials':'DMMにログインできません。 資格情報を確認してもう一度試してください。',
 'long_invalid_credentials': 'DMMにログインできません。/config コマンドで資格情報を確認してもう一度試してください。',
 'request_password': 'DMMアカウントのパスワードを送ってください：',
