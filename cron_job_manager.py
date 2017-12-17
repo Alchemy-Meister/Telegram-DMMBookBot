@@ -175,6 +175,8 @@ class CronJobManager:
                         CronJobManager.logger.info('Adding a new serie to DB: '
                             + '%s', serie.title)
                         CronJobManager.thumbnail(db_session, serie, db_manager)
+                    CronJobManager.logger.info('Processing volumes of ' \
+                        + 'series %s', serie.title)
                     volumes = dmm.get_book_volumes(session, book)
                     for volume in volumes:
                         db_volume = db_manager.get_manga_volume(

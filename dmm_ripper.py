@@ -72,9 +72,8 @@ def get_session(email, password, fast=False):
 
     return session
 
-def get_books_list(html):
+def get_books_list(soup):
     books = []
-    soup = BeautifulSoup(html, 'html.parser')
 
     try:
         book_list = soup.find('ul', {'class': \
@@ -128,7 +127,9 @@ def get_purchased_books(session, max_attempts=5):
                 logger.info('Successfully requested page %d of purchased books',
                     page)
                 try:
-                    books.extend(get_books_list(response.text))
+                    books.extend(get_books_list(
+                        BeautifulSoup(response.text, 'html.parser'))
+                    )
                     page += 1
                     error = False
                     attempt_num = 0
@@ -155,17 +156,62 @@ def get_purchased_books(session, max_attempts=5):
     
     return books
 
-def get_book_volumes(session, book):
+def get_book_volumes(session, book, max_attempts=5):
     volumes = []
     if 'series' not in book:
         volumes.append(dict(book))
         del volumes[0]['series']
     else:
-        response = requests.get(book['url'], cookies=session.cookies.get_dict())
-        if response.status_code == 200:
-            volumes = list(reversed(get_books_list(response.text)))
+        last_page = False
+        page = 1
+        error = False
+        attempt_num = 0
+        while not last_page:
+            while (not attempt_num) or (error and attempt_num < max_attempts):
+                response = requests.get(book['url'],
+                    params={'page': page},
+                    cookies=session.cookies.get_dict()
+                )
+                if response.status_code == 200:
+                    logger.info('Successfully requested page %d of volumes ' \
+                        + 'of series', page)
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    try:
+                        pagination = soup.find('ul', 
+                            {'class': 'm-boxPagenation__list'}
+                        )
+                        last_soup_page = pagination.findChildren('li',
+                            {'class': 'm-boxPagenation__list__item'}
+                        )[-1]
+                        try:
+                            volumes.extend(get_books_list(soup))
+                        except Exception:
+                            raise Exception('Unable to obtain all the ' \
+                                + 'volumes in series')
+                        try:
+                            #if not last page it should contain a link.
+                            last_soup_page.findChild()['href']
+                            page += 1
+                            error = False
+                            attempt_num = 0
+                        except:
+                            last_page = True
+                            break
+                    except:
+                        logger.exception('Pagination system incompatible.')
+                else:
+                    logger.info('Failed to obtain response for page {} of ' \
+                        + 'volumes of series, attempt {} out of {}'.format(
+                            page, attempt_num + 1, max_attempts
+                        )
+                    )
+                    error = True
+                    attempt_num += 1
 
-    return volumes
+        if error:
+            raise Exception('Unable to obtain all the volumes in series')
+
+    return list(reversed(volumes))
 
 def get_book_details(session, details_url):
     details = None
