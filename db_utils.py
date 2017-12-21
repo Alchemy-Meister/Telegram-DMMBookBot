@@ -5,6 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import (scoped_session, relationship, sessionmaker,
     contains_eager)
 from sqlalchemy import create_engine
+from sqlalchemy_utils import force_auto_coercion, EncryptedType
 from constants import FileFormat
 from datetime import datetime
 from config import Config
@@ -12,7 +13,10 @@ import logging
 import os
 import sys
 import utilities as utils
- 
+
+
+force_auto_coercion()
+
 Base = declarative_base()
 
 user_manga_table = Table('user_manga', Base.metadata,
@@ -25,8 +29,8 @@ class User(Base):
     __tablename__ = 'user'
     id = Column(BigInteger, primary_key=True)
     language_code = Column(String(2))
-    email = Column(String(50))
-    password = Column(String(50))
+    email = Column(EncryptedType(String, Config.SECRET_KEY))
+    password = Column(EncryptedType(String, Config.SECRET_KEY))
     save_credentials = Column(Boolean(create_constraint=False))
     file_format = Column(Enum(FileFormat), default=FileFormat.pdf)
     cache_expire_date = Column(

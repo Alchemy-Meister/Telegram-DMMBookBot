@@ -1,9 +1,11 @@
 arrow
 APScheduler
 beautifulsoup4
+cryptography
 img2pdf
 python-telegram-bot
 requests
 selenium
 sendclient
 SQLAlchemy
+SQLAlchemy-Utils
