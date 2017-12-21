@@ -6,9 +6,9 @@ from apscheduler.events import EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 from db_utils import Database, User, Manga, MangaSeries
 from sendclient import upload
-from constants import FileFormat
+from constants import CallbackCommand, FileFormat
 from telegram import ParseMode
-from uguuAPI import uploadfile
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import dmm_ripper as dmm
 import logging
 import utilities as utils
@@ -455,7 +455,6 @@ class CronJobManager:
             user = subscriber['user']
             
             if path.getsize(file_format_path) >= CronJobManager.max_upload_size:
-                url = uploadfile(file_format_path)
                 bot.send_message(chat_id=user.id,
                     text=CronJobManager.lang[user.language_code]['generate_url']
                 )
@@ -487,19 +486,38 @@ class CronJobManager:
     
     @staticmethod
     def generante_storage_url_job(file_path, preferred_format, bot, user):
-        secretUrl, delete_token = upload.send_file(
-            'https://send.firefox.com/', open(file_path, 'rb'),
-            ignoreVersion=False,
-            fileName='{}.{}'.format(
-                utils.random_string(32),
-                preferred_format)
+        try:
+            secretUrl, file_id, owner_token = upload.send_file(
+                'https://send.firefox.com/', open(file_path, 'rb'),
+                ignoreVersion=False,
+                fileName='{}.{}'.format(
+                    utils.random_string(32),
+                    preferred_format)
+                )
+            delete_button = InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton(
+                        CronJobManager.lang[user.language_code]['delete_url'], 
+                        callback_data=str({
+                            'cmd': CallbackCommand.remove_url.value,
+                            'id': file_id,
+                            'own': owner_token
+                        })
+                    )]
+                ]
             )
-        bot.send_message(chat_id=user.id,
-            text=CronJobManager.lang[user.language_code]['url_send'] \
-                .format(secretUrl),
-            disable_web_page_preview=True,
-            parse_mode=ParseMode.HTML
-        )
+            bot.send_message(chat_id=user.id,
+                text=CronJobManager.lang[user.language_code]['url_send'] \
+                    .format(secretUrl),
+                disable_web_page_preview=True,
+                parse_mode=ParseMode.HTML,
+                reply_markup=delete_button
+            )
+        except:
+            bot.send_message(chat_id=user.id,
+                text=CronJobManager.lang[user.language_code] \
+                    ['error_generate_url'].format(secretUrl),
+            )
 
     @staticmethod
     def get_instance(languages=None, max_upload_size=None):

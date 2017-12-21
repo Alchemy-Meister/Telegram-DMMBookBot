@@ -7,4 +7,3 @@ requests
 selenium
 sendclient
 SQLAlchemy
-uguuAPI

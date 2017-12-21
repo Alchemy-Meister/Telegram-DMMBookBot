@@ -7,6 +7,7 @@ from telegram import (InlineQueryResultArticle, ParseMode,
     InlineKeyboardMarkup)
 from telegram.ext import (InlineQueryHandler, CallbackQueryHandler,
     ChosenInlineResultHandler)
+from constants import CallbackCommand
 from db_utils import Database, MangaSeries
 
 import utilities as utils
@@ -54,7 +55,10 @@ class BookSearchHandler(InlineQueryHandler):
                     [
                         [InlineKeyboardButton(
                             self.lang[language_code]['download'], 
-                            callback_data=str(book.id)
+                            callback_data=str({
+                                'cmd': CallbackCommand.download.value,
+                                'book': book.id
+                            })
                         )]
                     ]
                 )

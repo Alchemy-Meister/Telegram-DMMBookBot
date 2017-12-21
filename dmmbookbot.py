@@ -7,10 +7,10 @@ from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove,
 from telegram.ext import (Updater, CommandHandler, MessageHandler)
 from conversation import (StartWizard, ConfigWizard, ListBookHandler, 
     BookSearchHandler, BookDownloadHandler)
+from config import Config
 from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
-from config import Config
 import logging
 import utilities as utils
 

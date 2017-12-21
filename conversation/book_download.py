@@ -1,8 +1,10 @@
 from telegram.ext import CallbackQueryHandler, ConversationHandler, RegexHandler
 from telegram import KeyboardButton, ParseMode
-from db_utils import Database, FileFormat
+from constants import CallbackCommand, FileFormat
+from db_utils import Database
 from cron_job_manager import CronJobManager
 from os import path
+from sendclient import delete
 import logging
 import utilities as utils
 
@@ -22,7 +24,7 @@ class BookDownloadHandler(ConversationHandler):
             initial_state, initial_state + BookDownloadHandler.num_states
         )
         self.entry_points = [CallbackQueryHandler(
-            self.request_download_book, pass_user_data=True
+            self.callback, pass_user_data=True
         )]
         self.states = {
             self.PROCESS_PASSWORD: [RegexHandler(
@@ -39,14 +41,36 @@ class BookDownloadHandler(ConversationHandler):
             per_chat=False
         )
 
-    def request_download_book(self, bot, update, user_data):
+    def callback(self, bot, update, user_data):
         query = update.callback_query
-        book_id = query.data
+        query_data = eval(query.data)
+        command = CallbackCommand(query_data['cmd'])
         user_id = query.from_user.id
         session = self.db_manager.create_session()
         user = self.db_manager.get_user(session, user_id)
-        book = self.db_manager.get_volume_by_id(session, book_id)
+        if command == CallbackCommand.download:
+            book_id = query_data['book']
+            book = self.db_manager.get_volume_by_id(session, book_id)
+            self.db_manager.remove_session()
+            return self.request_download_book(
+                bot, update, book, user, user_data, query.inline_message_id
+            )
+        elif command == CallbackCommand.remove_url:
+            self.db_manager.remove_session()
+            self.delete_hosting_file(
+                bot, update, user, query_data['id'], query_data['own'],
+                query.message.message_id
+            )
+            return ConversationHandler.END
+
+    def request_download_book(self, bot, update, book, user, user_data,
+        inline_message_id):
+        
+        session = self.db_manager.create_session()
+        session.add(book)
         book_path = utils.get_book_download_path(self.download_path, book)
+        if not utils.dir_exists(book_path):
+            utils.create_dir(book_path)
         book_images = utils.get_book_page_num_list(book_path)
         missing_images = utils.book_missing_pages(1, book.pages, book_images)
         self.logger.info('User %s requested to download book %s',
@@ -55,7 +79,7 @@ class BookDownloadHandler(ConversationHandler):
             + 'book %s for user %s', book.id, user.id)
         bot.editMessageReplyMarkup(
             chat_id = None,
-            inline_message_id = query.inline_message_id,
+            inline_message_id = inline_message_id,
             reply_markup=None
         )
         if not missing_images:
@@ -69,7 +93,9 @@ class BookDownloadHandler(ConversationHandler):
                 book_path, '.{}'.format(preferred_format.lower())
             )
             if file_format_path:
-                if path.getsize(file_format_path) >= CronJobManager.max_upload_size:
+                if path.getsize(file_format_path) \
+                    >= CronJobManager.max_upload_size:
+                    
                     bot.send_message(chat_id=user.id,
                         text=self.lang[user.language_code]['generate_url']
                     )
@@ -115,8 +141,6 @@ class BookDownloadHandler(ConversationHandler):
                 )
                 return ConversationHandler.END
 
-        self.db_manager.remove_session()
-
     def process_password(self, bot, update, user_data):
         password = update.message.text
         self.download_pages(bot, update, user_data['book_path'], 
@@ -136,6 +160,24 @@ class BookDownloadHandler(ConversationHandler):
             self.scheduler.download_book_pages(
                 book_path, missing_images, book, user, bot, update, 
                 password=password
+            )
+
+    def delete_hosting_file(self, bot, update, user, file_id, owner_token,
+        message_id):
+        
+        bot.editMessageReplyMarkup(
+            chat_id=user.id,
+            message_id=message_id,
+            reply_markup=None
+        )
+        try:
+            delete.api_delete('https://send.firefox.com/', file_id, owner_token)
+            bot.send_message(chat_id=user.id,
+                text=self.lang[user.language_code]['url_removed']
+            )
+        except:
+            bot.send_message(chat_id=user.id,
+                text=self.lang[user.language_code]['url_already_removed']
             )
 
     def cancel(self):

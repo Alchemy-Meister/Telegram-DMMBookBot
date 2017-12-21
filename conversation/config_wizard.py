@@ -91,15 +91,17 @@ class ConfigWizard(ConversationHandler):
         user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
         self.db_manager.remove_session()
-
         if concat_message == None:
+            self.logger.info('user %s requested /config command.', user_id)
             message = self.lang[language_code]['config_menu_request']
         else:
+            self.logger.info('sending user %s config menu.', user_id)
             message = '{}\n\n{}'.format(
                 self.lang[language_code][concat_message],
                 self.lang[language_code]['config_menu_request']
             )
-
+        self.logger.info('sending user %s config menu request message.',
+                user_id)
         self.keyboard_request(
             update,
             message,
@@ -122,6 +124,8 @@ class ConfigWizard(ConversationHandler):
         self.db_manager.remove_session()
 
         if reply_menu == self.lang[language_code]['language']:
+            self.logger.info('sending user %s language selection message.',
+                user_id)
             self.keyboard_request(
                 update,
                 self.lang[language_code]['select_language'],
@@ -138,6 +142,8 @@ class ConfigWizard(ConversationHandler):
             self.request_library(update, user)
             return self.PROCESS_LIBRARY
         elif reply_menu == self.lang[language_code]['exit']:
+            self.logger.info('sending user %s exit from config menu message.',
+                user_id)
             self.send_message(
                 update,
                 language_code,
@@ -157,6 +163,8 @@ class ConfigWizard(ConversationHandler):
 
         if reply_language_code == None:
             self.db_manager.remove_session()
+            self.logger.info('sending user %s invalid language message.',
+                user_id)
             self.keyboard_request(
                 update,
                 self.lang[language_code]['invalid_language'],
@@ -191,6 +199,8 @@ class ConfigWizard(ConversationHandler):
             buttons[1:1] = [[self.lang[language_code]['password']]]
 
         if concat_messages != None:
+            self.logger.info('user %s returning to account menu.',
+                user.id)
             concat_message = self.lang[language_code][concat_messages.pop(0)]
             for m in concat_messages:
                 concat_message += ' ' + self.lang[language_code][m] 
@@ -199,8 +209,9 @@ class ConfigWizard(ConversationHandler):
                 self.lang[language_code]['config_menu_request']
             )
         else:
+            self.logger.info('sending user %s account menu message.',
+                user.id)
             message = self.lang[language_code]['config_menu_request']
-
         self.keyboard_request(
             update,
             message,
@@ -217,11 +228,15 @@ class ConfigWizard(ConversationHandler):
         ]
 
         if concat_message != None:
+            self.logger.info('user %s returning to library menu.',
+                user.id)
             message = '{}\n\n{}'.format(
                 self.lang[language_code][concat_message], 
                 self.lang[language_code]['config_menu_request']
             )
         else:
+            self.logger.info('sending user %s library menu message.',
+                user.id)
             message = self.lang[language_code]['config_menu_request']
 
         self.keyboard_request(
@@ -239,6 +254,8 @@ class ConfigWizard(ConversationHandler):
         self.db_manager.remove_session()
 
         if reply_menu == self.lang[language_code]['email']:
+            self.logger.info('sending user %s email request message.',
+                user_id)
             self.send_message(
                 update,
                 language_code,
@@ -249,6 +266,8 @@ class ConfigWizard(ConversationHandler):
         elif (user.save_credentials == True) \
             and (reply_menu == self.lang[language_code]['password']):
             
+            self.logger.info('sending user %s password request message.',
+                user_id)
             self.send_message(
                 update,
                 language_code,
