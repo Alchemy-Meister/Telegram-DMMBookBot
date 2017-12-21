@@ -40,12 +40,6 @@ def create_dir(dir_name):
     if not os.path.exists(dir_name):
         os.makedirs(dir_name)
 
-def callback_command(command):
-    return '{{"command":"{0}"}}'.format(command)
-
-def callback_string(command, value):
-    return '{{"command":"{0}","value":"{1}"}}'.format(command, value)
-
 def get_key_with_value(dictionary, value, default=None):
     for k, v in dictionary.items():
         for list_value in v:
