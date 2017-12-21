@@ -89,6 +89,8 @@ class BookDownloadHandler(ConversationHandler):
                 preferred_format = FileFormat(FileFormat.pdf).name
             elif user.file_format == FileFormat.epub:
                 preferred_format = FileFormat(FileFormat.epub).name
+            elif user.file_format == FileFormat.zip:
+                preferred_format = FileFormat(FileFormat.zip).name
             file_format_path = utils.get_book_by_format(
                 book_path, '.{}'.format(preferred_format.lower())
             )

@@ -66,7 +66,7 @@ class ConfigWizard(ConversationHandler):
                 self.process_password_update_library
             )],
             self.PROCESS_FILE_FORMAT: [RegexHandler(
-                '^(' + self.lang['common']['jpg'] + '|' \
+                '^(' + self.lang['common']['zip'] + '|' \
                 + self.lang['common']['pdf'] + '|' \
                 + self.lang['common']['epub'] + ')$',
                 self.process_file_format
@@ -404,7 +404,7 @@ class ConfigWizard(ConversationHandler):
                 update,
                 message,
                 [
-                    [self.lang['common']['jpg']],
+                    [self.lang['common']['zip']],
                     [self.lang['common']['pdf']],
                     [self.lang['common']['epub']]
                 ]
@@ -436,9 +436,9 @@ class ConfigWizard(ConversationHandler):
         user = self.db_manager.get_user(session, user_id)
         language_code = user.language_code
 
-        if reply_format == self.lang['common']['jpg']:
+        if reply_format == self.lang['common']['zip']:
             self.db_manager.set_user_file_format(
-                session, user_id, FileFormat.jpg
+                session, user_id, FileFormat.zip
             )
         elif reply_format == self.lang['common']['pdf']:
             self.db_manager.set_user_file_format(

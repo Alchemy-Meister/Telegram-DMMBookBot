@@ -9,6 +9,7 @@ import sys
 import random
 import re
 import dmm_ripper as dmm
+import zipfile
 from constants import FileFormat
 from datetime import datetime
 from epub_converter import Book
@@ -104,8 +105,19 @@ def download_progress_bar(current_page, total_pages):
 def convert_book(user_format, path, book):
     return {
         FileFormat.pdf: convert_book2pdf,
-        FileFormat.epub: convert_book2epub
+        FileFormat.epub: convert_book2epub,
+        FileFormat.zip: convert_book2jpg_zip
     }[user_format](path, book)
+
+def convert_book2jpg_zip(path, book):
+    logger.info('Creating jpg zip from %s book\'s images', book.id)
+    book_pages = get_book_image_paths(path)
+    zip_path = os.path.join(path, '{}.zip'.format(book.title))
+    zip_file = zipfile.ZipFile(zip_path, 'w')
+    for page in book_pages:
+        zip_file.write(page, os.path.basename(page))
+    zip_file.close()
+    return zip_path
 
 def convert_book2pdf(path, book):
     logger.info('Creating pdf from %s book\'s images', book.id)

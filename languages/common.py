@@ -1,5 +1,5 @@
 common = {
-	'jpg': 'JPG',
+	'zip': 'ZIP',
 	'pdf': 'PDF',
 	'epub': 'EPUB'
 }
