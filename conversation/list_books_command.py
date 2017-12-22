@@ -43,7 +43,7 @@ class ListBookHandler(CommandHandler):
                 message = '{}\n\n{}'.format(
                     self.lang[language_code]['update_library_error'],
                     self.lang[language_code]['library_request'] \
-                        .format(date, num_titles, num_titles)
+                        .format(date, num_titles, num_books)
                 )
             else:
                 message = self.lang[language_code]['library_request'] \
