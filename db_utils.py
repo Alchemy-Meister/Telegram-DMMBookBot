@@ -14,7 +14,6 @@ import os
 import sys
 import utilities as utils
 
-
 force_auto_coercion()
 
 Base = declarative_base()
@@ -40,7 +39,7 @@ class User(Base):
     cache_built = Column(Boolean(create_constraint=False), default=False)
     login_error = Column(Boolean(create_constraint=False), default=False)
     book_collection = relationship(
-        'Manga', secondary=user_manga_table, backref='owners', lazy='dynamic'
+        'Manga', secondary=lambda: user_manga_table
     )
 
 class MangaSeries(Base):

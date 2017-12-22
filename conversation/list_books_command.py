@@ -29,33 +29,30 @@ class ListBookHandler(CommandHandler):
         language_code = user.language_code
 
         if user.cache_built:
+            if user.language_code == 'ja':
+                date = user.cache_expire_date.replace(tzinfo=self.time_zone)
+                date = (date - timedelta(days=1)).strftime('%Y/%m/%d')
+            else:
+                date = user.cache_expire_date.replace(tzinfo=None)
+                date = (date - timedelta(days=1)).strftime('%Y/%d/%m')
+            num_titles = len(
+                    self.db_manager.get_user_library(session, user_id)
+                )
+            num_books = len(user.book_collection)
             if user.login_error:
-                if user.language_code == 'ja':
-                    date = user.cache_expire_date.replace(tzinfo=self.time_zone)
-                    date = (date - timedelta(days=1)).strftime('%Y/%m/%d')
-                else:
-                    date = user.cache_expire_date.replace(tzinfo=None)
-                    date = (date - timedelta(days=1)).strftime('%Y/%d/%m')
-
                 message = '{}\n\n{}'.format(
                     self.lang[language_code]['update_library_error'],
-                    self.lang[language_code]['last_library_request'] \
-                        .format(date)
+                    self.lang[language_code]['library_request'] \
+                        .format(date, num_titles, num_titles)
                 )
             else:
-                message = self.lang[language_code]['library_request']
-            
-            button_library = [InlineKeyboardButton(x.title, \
-                callback_data=x.url) \
-                for x in self.db_manager.get_user_library(session, user_id)]
+                message = self.lang[language_code]['library_request'] \
+                    .format(date, num_titles, num_books)
 
-            self.db_manager.remove_session()
-
-            button_library.append(InlineKeyboardButton(
+            button_library = [InlineKeyboardButton(
                 self.lang[language_code]['search_library'],
                 switch_inline_query_current_chat=''
-                )
-            )
+            )]
 
             reply_markup = InlineKeyboardMarkup(
                 utils.build_menu(button_library)
@@ -71,7 +68,7 @@ class ListBookHandler(CommandHandler):
             self.send_message(
                     update, language_code, [message]
                 )
-
+        self.db_manager.remove_session()
         return ConversationHandler.END
 
     def send_message(self, update, language_code, message_codes, 
