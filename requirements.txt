@@ -3,6 +3,7 @@ APScheduler
 beautifulsoup4
 cryptography
 img2pdf
+lxml
 python-telegram-bot
 requests
 selenium

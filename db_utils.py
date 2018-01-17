@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy_utils import force_auto_coercion, EncryptedType
 from constants import FileFormat
 from datetime import datetime
-from config import Config
+from data.config import Config
 import logging
 import os
 import sys

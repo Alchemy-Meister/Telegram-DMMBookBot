@@ -1,5 +1,5 @@
 #Production Config
-config/
+data/config/
 
 #MacOS Bullshit
 .DS_Store

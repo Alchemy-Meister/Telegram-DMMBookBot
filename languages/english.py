@@ -21,7 +21,7 @@ en = {
 'long_invalid_credentials': 'Unable to log in to DMM. Please, update your credentials from /config command and try again.',
 'request_password': 'Please, send me your DMM account\'s password:',
 'password_changed': 'I have updated your DMM password.',
-'ready': 'Configuration Finished! You can check all the available operations in /help.',
+'ready': 'Configuration Finished!',
 'config_menu_request': 'What do you want to modify?',
 'building_cache': 'I\'m updating your DMM profile cache now. This may take some time. Please, try again later.',
 'library_request': 'As for {}, your library contains {} titles, consisting in a total of {} books.\n\nYou can manually update your DMM profile cache by running /config > Library > Update Library command.',

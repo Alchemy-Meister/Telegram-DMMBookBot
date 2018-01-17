@@ -21,7 +21,7 @@ ja = {
 'long_invalid_credentials': 'DMMにログインできません。/config コマンドで資格情報を確認してもう一度試してください。',
 'request_password': 'DMMアカウントのパスワードを送ってください：',
 'password_changed': 'DMMのパスワードを更新しました。',
-'ready': '構成が完了しました！ /help コマンドで利用可能なすべての操作を確認できます。',
+'ready': '構成が完了しました！',
 'config_menu_request': '何を変更したいですか',
 'building_cache': '今DMMのプロファイルキャッシュを更新しています。後でやり直してください。',
 'library_request': '{}に、ライブラリーに{}冊のタイトルがあり、DMMには全部で{}冊の本があります。\n\n【/config > ライブラリー > ライブラリーを更新する】コマンドを実行すると、DMMプロファイルキャッシュを手動で更新できます。',
