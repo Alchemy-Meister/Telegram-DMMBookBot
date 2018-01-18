@@ -4,14 +4,15 @@
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 import logging
+import os
 import re
 import requests
 import sys
 import utilities
 
-debug = False
 book_url = 'https://book.dmm.com'
 library_url = book_url + '/library/'
 var_ids = ['server', 'book_id', 'license', 'title', 'author', 'pages']
@@ -35,11 +36,39 @@ def get_login_url(fast):
 
 def get_session(email, password, fast=False):
     login_url = get_login_url(fast)
-
-    if debug:
-        driver = webdriver.Chrome()
-    else:
-        driver = webdriver.PhantomJS()
+    options = Options()
+    options.add_argument('--no-sandbox')
+    # Disable various background network services, including extension updating,
+    #   safe browsing service, upgrade detector, translate, UMA
+    #options.add_argument('--disable-background-networking')
+    # Disable installation of default apps on first run
+    #options.add_argument('--disable-default-apps')
+    # Disable all chrome extensions entirely
+    options.add_argument('--disable-extensions')
+    # Disable the GPU hardware acceleration
+    options.add_argument('--disable-gpu')
+    # Disable syncing to a Google account
+    #options.add_argument('--disable-sync')
+    # Disable built-in Google Translate service
+    options.add_argument('--disable-translate')
+    # Run in headless mode
+    options.add_argument('--headless')
+    # Hide scrollbars on generated images/PDFs
+    #options.add_argument('--hide-scrollbars')
+    # Disable reporting to UMA, but allows for collection
+    #options.add_argument('--metrics-recording-only')
+    # Mute audio
+    #options.add_argument('--mute-audio')
+    # Skip first run wizards
+    #options.add_argument('--no-first-run')
+    # Expose port 9222 for remote debugging
+    #options.add_argument('--remote-debugging-port=9222')
+    # Disable fetching safebrowsing lists, likely redundant due to 
+    #   disable-background-networking
+    #options.add_argument('--safebrowsing-disable-auto-update')
+    options.binary_location = os.environ['CHROME_BIN']
+    
+    driver = webdriver.Chrome(chrome_options=options)
     
     driver.get(login_url)
 
@@ -59,7 +88,6 @@ def get_session(email, password, fast=False):
     session = requests.Session()
     for cookie in cookies:
         session.cookies.set(cookie['name'], cookie['value'])
-
     
     valid_session = False
     for cookie in session_cookies:

@@ -54,7 +54,7 @@ def main():
     dispatcher.add_handler(search_book_handler)
     dispatcher.add_handler(book_download_handler)
 
-    updater.start_polling(timeout=60)
+    updater.start_polling()
     updater.idle()
 
 if __name__ == '__main__':
