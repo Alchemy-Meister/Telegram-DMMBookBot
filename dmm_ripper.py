@@ -2,7 +2,7 @@
 # -*-coding:utf-8 -*-
 
 from bs4 import BeautifulSoup
-from pyvirtualdisplay import Display
+#from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 # from selenium.webdriver.chrome.options import Options
@@ -71,10 +71,11 @@ def get_session(email, password, fast=False):
     
     #driver = webdriver.Chrome(chrome_options=options)
     try:
-        display = Display(visible=0, size=(1024, 768))
-        display.start()
+        #display = Display(visible=0, size=(1024, 768))
+        #display.start()
         
-        driver = webdriver.Firefox()
+        #driver = webdriver.Firefox()
+        driver = webdriver.PhantomJS()
         driver.get(login_url)
 
         inputElement = driver.find_element_by_id('login_id')
@@ -90,7 +91,7 @@ def get_session(email, password, fast=False):
 
         driver.close()
         driver.quit()
-        display.close()
+        #display.close()
 
         session = requests.Session()
         for cookie in cookies:

@@ -1,6 +1,11 @@
 #Production Config
 data/config/
 
+PhantomJS arm binaries
+phantomjs/
+
+*.tar.gz
+
 #MacOS Bullshit
 .DS_Store
 
