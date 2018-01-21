@@ -5,9 +5,8 @@ cryptography
 img2pdf
 lxml
 python-telegram-bot
-pyvirtualdisplay
 requests
-selenium==3.4.0
+selenium
 sendclient
 SQLAlchemy
 SQLAlchemy-Utils
