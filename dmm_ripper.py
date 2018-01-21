@@ -2,10 +2,11 @@
 # -*-coding:utf-8 -*-
 
 from bs4 import BeautifulSoup
+from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.support.ui import WebDriverWait
 import logging
 import os
 import re
@@ -36,23 +37,23 @@ def get_login_url(fast):
 
 def get_session(email, password, fast=False):
     login_url = get_login_url(fast)
-    options = Options()
-    options.add_argument('--no-sandbox')
+    #options = Options()
+    #options.add_argument('--no-sandbox')
     # Disable various background network services, including extension updating,
     #   safe browsing service, upgrade detector, translate, UMA
     #options.add_argument('--disable-background-networking')
     # Disable installation of default apps on first run
     #options.add_argument('--disable-default-apps')
     # Disable all chrome extensions entirely
-    options.add_argument('--disable-extensions')
+    #options.add_argument('--disable-extensions')
     # Disable the GPU hardware acceleration
-    options.add_argument('--disable-gpu')
+    #options.add_argument('--disable-gpu')
     # Disable syncing to a Google account
     #options.add_argument('--disable-sync')
     # Disable built-in Google Translate service
-    options.add_argument('--disable-translate')
+    #options.add_argument('--disable-translate')
     # Run in headless mode
-    options.add_argument('--headless')
+    #options.add_argument('--headless')
     # Hide scrollbars on generated images/PDFs
     #options.add_argument('--hide-scrollbars')
     # Disable reporting to UMA, but allows for collection
@@ -66,39 +67,47 @@ def get_session(email, password, fast=False):
     # Disable fetching safebrowsing lists, likely redundant due to 
     #   disable-background-networking
     #options.add_argument('--safebrowsing-disable-auto-update')
-    options.binary_location = os.environ['CHROME_BIN']
+    #options.binary_location = os.environ['CHROME_BIN']
     
-    driver = webdriver.Chrome(chrome_options=options)
-    
-    driver.get(login_url)
+    #driver = webdriver.Chrome(chrome_options=options)
+    try:
+        display = Display(visible=0, size=(1024, 768))
+        display.start()
+        
+        driver = webdriver.Firefox()
+        driver.get(login_url)
 
-    inputElement = driver.find_element_by_id('login_id')
-    inputElement.send_keys(email)
-    inputElement = driver.find_element_by_id('password')
-    inputElement.send_keys(password)
+        inputElement = driver.find_element_by_id('login_id')
+        inputElement.send_keys(email)
+        inputElement = driver.find_element_by_id('password')
+        inputElement.send_keys(password)
 
-    login_button = driver.find_element_by_xpath( \
-        '//*[@id="loginbutton_script_on"]/span/input' )
-    login_button.submit()
+        login_button = driver.find_element_by_xpath( \
+            '//*[@id="loginbutton_script_on"]/span/input' )
+        login_button.submit()
 
-    cookies = driver.get_cookies()
+        cookies = driver.get_cookies()
 
-    driver.quit()
+        driver.close()
+        driver.quit()
+        display.close()
 
-    session = requests.Session()
-    for cookie in cookies:
-        session.cookies.set(cookie['name'], cookie['value'])
-    
-    valid_session = False
-    for cookie in session_cookies:
-        if cookie in session.cookies:
-            valid_session = True
-            break
+        session = requests.Session()
+        for cookie in cookies:
+            session.cookies.set(cookie['name'], cookie['value'])
+        
+        valid_session = False
+        for cookie in session_cookies:
+            if cookie in session.cookies:
+                valid_session = True
+                break
 
-    if not valid_session:
-        raise Exception('Invalid session: wrong DMM email or password')
+        if not valid_session:
+            raise Exception('Invalid session: wrong DMM email or password')
 
-    return session
+        return session
+    except Exception as e:
+        print(e)
 
 def get_books_list(soup):
     books = []
