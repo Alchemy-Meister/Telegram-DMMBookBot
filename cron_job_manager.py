@@ -9,7 +9,7 @@ from sendclient import upload
 from constants import CallbackCommand, FileFormat
 from telegram import ParseMode
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-import dmm_ripper as dmm
+from dmm_ripper import DMMRipper
 import logging
 import utilities as utils
 import pytz
@@ -27,6 +27,7 @@ class CronJobManager:
     lang = None
     logger = logging.getLogger(__name__)
     max_upload_size = None
+    webdriver_config = None
 
     def __init__(self):
 
@@ -35,6 +36,9 @@ class CronJobManager:
         else:
             self.update_cron_start_time()
             self.db_manager = Database.get_instance()
+            self.dmm_ripper = DMMRipper.get_instance(
+                CronJobManager.webdriver_config
+            )
             jobstores = {
                 # 'alchemy': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite'),
                 'default': MemoryJobStore()
@@ -157,10 +161,12 @@ class CronJobManager:
             if session == None:
                 if user.save_credentials:
                     password = user.password
-                session = dmm.get_session(user.email, password, fast)
+                session = CronJobManager.__instance.dmm_ripper.get_session(
+                    user.email, password, fast)
                 CronJobManager.logger.info('Obtaining a new DMM session for ' \
                     + 'user %s', user.id)
-            books = dmm.get_purchased_books(session)
+            books = CronJobManager.__instance.dmm_ripper.get_purchased_books(
+                session)
             db_session.add(user)
             for book in books:
                 if book['series']:
@@ -177,13 +183,17 @@ class CronJobManager:
                         CronJobManager.thumbnail(db_session, serie, db_manager)
                     CronJobManager.logger.info('Processing volumes of ' \
                         + 'series %s', serie.title)
-                    volumes = dmm.get_book_volumes(session, book)
+                    volumes = CronJobManager.__instance.dmm_ripper \
+                    .get_book_volumes(
+                        session, book
+                    )
                     for volume in volumes:
                         db_volume = db_manager.get_manga_volume(
                             db_session, volume['url']
                         )
                         if not db_volume:
-                            volume_details = dmm.get_book_details(
+                            volume_details = CronJobManager.__instance \
+                            .dmm_ripper.get_book_details(
                                 session, volume['details_url']
                             )
                             db_volume = Manga(
@@ -214,7 +224,8 @@ class CronJobManager:
                 else:
                     book = db_manager.get_manga_volume(db_session, book['url'])
                     if not book:
-                        book_details = dmm.get_book_details(
+                        book_details = CronJobManager.__instance.dmm_ripper \
+                        .get_book_details(
                             session, book['details_url']
                         )
                         book = Manga(
@@ -252,6 +263,7 @@ class CronJobManager:
                 + 'of user %s', user.id)
             db_manager.set_user_login_error(db_session, user.id, True)
             CronJobManager.remove_scheduled_user_cache(user.id)
+            CronJobManager.logger.exception(e)
         finally:
             CronJobManager.logger.info(
                 '%s user\'s library caching ended', user.id
@@ -326,8 +338,8 @@ class CronJobManager:
         )
 
     @staticmethod
-    def get_dmm_session_for_book_download(book):
-        dmm_session = None
+    def get_dmm_cookies_for_book_download(book):
+        dmm_cookies = None
         for index, subscriber in enumerate(
             CronJobManager.book_job[book.id]['download']):
             
@@ -339,22 +351,25 @@ class CronJobManager:
             try:
                 CronJobManager.logger.info('Obtaining a new DMM session for ' \
                     + 'subscriber %s', user.id)
-                dmm_session = dmm.get_session(user.email, password, False)
+                dmm_cookies = CronJobManager.__instance \
+                    .dmm_ripper.get_session_cookies(user.email, password, \
+                        False, remove_cookies=False)
                 break
             except Exception as e:
+                CronJobManager.__instance.dmm_ripper.close_session()
                 CronJobManager.logger.info('Unable to login to the DMM ' \
                     + 'account of subscriber %s. Attempt %s out of %s', 
                     user.id,
                     index + 1,
                     len(CronJobManager.book_job[book.id]['download'])
                 )
-        return dmm_session
+        return dmm_cookies
 
     @staticmethod
     def download_book_pages_job(book_path, missing_images, book):
         db_manager = Database.get_instance()
         db_session = db_manager.create_session()
-        dmm_session = None
+        dmm_cookies = None
         CronJobManager.logger.info('Starting download job of book %s', book.id)
         db_manager.set_volume_now_downloading(db_session, book.id, True)
         num_miss_imgs = len(missing_images)
@@ -370,14 +385,25 @@ class CronJobManager:
                 ),
                 parse_mode=ParseMode.HTML
             )
-        dmm_session = CronJobManager.get_dmm_session_for_book_download(book)
+        dmm_cookies = CronJobManager.get_dmm_cookies_for_book_download(book)
 
-        if dmm_session:
+        if dmm_cookies:
             for index, page_num in enumerate(missing_images):
-                book_vars = dmm.get_book_vars(dmm_session, book)
-                page_url = dmm.get_page_download_url(book_vars, page_num)
-                dmm.download_image(
-                    page_url, path.join(book_path, '{}.jpg'.format(page_num))
+                # CronJobManager.__instance.dmm_ripper.open_book_reader(book)
+                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
+                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(False)
+                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
+                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
+                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(False)
+                # CronJobManager.__instance.dmm_ripper.move_to_page(195)
+                # CronJobManager.__instance.dmm_ripper.save_screenshot()
+                # CronJobManager.__instance.dmm_ripper.move_to_page(10)
+                # CronJobManager.__instance.dmm_ripper.save_screenshot()
+                # CronJobManager.__instance.dmm_ripper.move_to_page(1)
+                # CronJobManager.__instance.dmm_ripper.move_to_page(195)
+                CronJobManager.__instance.dmm_ripper.download_book_page( \
+                    book, page_num, \
+                    path.join(book_path, '{}.jpg'.format(page_num))
                 )
                 for subscriber in CronJobManager.book_job[book.id]['download']:
                     user = subscriber['user']
@@ -396,6 +422,7 @@ class CronJobManager:
                         )
                     except:
                         pass # Download percentage not modified
+            CronJobManager.__instance.dmm_ripper.close_broser_reader()
             CronJobManager.logger.info('Download of book %s has finished',
                 book.id)
             for subscriber in CronJobManager.book_job[book.id]['download']:
@@ -520,12 +547,15 @@ class CronJobManager:
             )
 
     @staticmethod
-    def get_instance(languages=None, max_upload_size=None):
+    def get_instance(languages=None, max_upload_size=None,
+        webdriver_config=None):
+
         if CronJobManager.__instance == None:
             if languages:
                 CronJobManager.lang = languages
             if max_upload_size:
                 CronJobManager.max_upload_size = max_upload_size
+            CronJobManager.webdriver_config = webdriver_config
             CronJobManager()
             CronJobManager.logger.info('CronJobManager singleton instanciated')
             session = CronJobManager.__instance.db_manager.create_session()

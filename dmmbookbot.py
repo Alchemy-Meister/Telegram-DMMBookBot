@@ -20,13 +20,17 @@ logging.basicConfig(
 logging.Formatter.converter = utils.logging_tz
 logger = logging.getLogger(__name__)
 
+def error_callback(bot, update, error):
+    logger.exception(error)
+
 def main():
     lang = {'en': english.en, 'ja': japanese.ja, 'common': common.common}
     language_codes = {'en': ['english', '英語'], 'ja': ['japanese','日本語']}
 
     db_manager = Database.get_instance()
     scheduler = CronJobManager.get_instance(
-        languages=lang, max_upload_size=Config.MAX_UPLOAD_SIZE
+        languages=lang, max_upload_size=Config.MAX_UPLOAD_SIZE, \
+        webdriver_config=Config.WEBDRIVER
     )
     scheduler.set_download_path(Config.DOWNLOAD_PATH)
 
@@ -53,6 +57,7 @@ def main():
     dispatcher.add_handler(list_books_handler)
     dispatcher.add_handler(search_book_handler)
     dispatcher.add_handler(book_download_handler)
+    dispatcher.add_error_handler(error_callback)
 
     updater.start_polling()
     updater.idle()

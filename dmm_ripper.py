@@ -2,11 +2,17 @@
 # -*-coding:utf-8 -*-
 
 from bs4 import BeautifulSoup
-#from pyvirtualdisplay import Display
+from dmm_browser_reader import DMMBrowserReader
 from selenium import webdriver
+from selenium.webdriver.common.alert import Alert
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
-# from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
 import logging
 import os
 import re
@@ -14,232 +20,184 @@ import requests
 import sys
 import utilities
 
+blank_url = 'about:blank'
+redirect_url = 'https://www.dmm.com/my/-/redirect/=/rurl='
 book_url = 'https://book.dmm.com'
 library_url = book_url + '/library/'
-var_ids = ['server', 'book_id', 'license', 'title', 'author', 'pages']
-session_cookies = ['login_session_id', 'login_secure_id', 'INT_SESID']
+driver_timeout = 10
 
-logger = logging.getLogger(__name__)
+class DMMRipper():
+    logger = logging.getLogger(__name__)
+    __instance = None
 
-def get_login_url(fast):
-    login_url = 'https://www.dmm.com/my/-/login/' \
-            + '=/path=DRVESRUMTh1aCl5THVILWk8GWVsf/channel=book'
+    def __init__(self, webdriver_config):
+        if DMMRipper.__instance != None:
+            raise Exception("This class is a singleton!")
+        else:
+            options = Options()
+            options.set_headless(headless=not webdriver_config['DEBUG_DRIVER'])
+            self.driver = webdriver.Firefox(firefox_options=options, \
+                executable_path = webdriver_config['GECKO_PATH'])
+            self.driver.set_window_size( \
+                webdriver_config['DRIVER_WINDOW_SIZE'][0], \
+                webdriver_config['DRIVER_WINDOW_SIZE'][1] \
+                + webdriver_config['FIREFOX_HEADER_SIZE']
+            )
+            self.browser_reader = None
+            DMMRipper.__instance = self
 
-    if fast:
-        return login_url
-    else:
-        response = requests.get(book_url)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        try:
-            return soup.find('a', attrs={'class': 'hd-btn--login'}).get('href')
-        except:
+    @staticmethod
+    def get_instance(webdriver_config=None):
+        if DMMRipper.__instance == None:
+            DMMRipper.logger.info('DMMRipper singleton instantiated')
+            DMMRipper(webdriver_config)
+        return DMMRipper.__instance
+
+    def add_cookies(self, cookies):
+        for cookie in cookies:
+            try:
+                self.driver.add_cookie(cookie)
+            except Exception as e:
+                print(e)
+
+    def add_domain_based_cookies(self, domain, cookies):
+        self.driver.get(domain)
+        self.add_cookies(cookies)
+
+    def remove_cookies(self, cookies):
+        for cookie in cookies:
+            try:
+                self.driver.delete_cookie(cookie['name'])
+            except Exception as i:
+                pass
+
+    def get_login_url(self, fast):
+        login_url = 'https://www.dmm.com/my/-/login/' \
+                + '=/path=DRVESRUMTh1aCl5THVILWk8GWVsf/channel=book'
+
+        if fast:
             return login_url
+        else:
+            response = requests.get(book_url)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            try:
+                return soup.find('a', attrs={'class': 'hd-btn--login'}) \
+                    .get('href')
+            except:
+                return login_url
 
-def get_session(email, password, fast=False):
-    login_url = get_login_url(fast)
-    #options = Options()
-    #options.add_argument('--no-sandbox')
-    # Disable various background network services, including extension updating,
-    #   safe browsing service, upgrade detector, translate, UMA
-    #options.add_argument('--disable-background-networking')
-    # Disable installation of default apps on first run
-    #options.add_argument('--disable-default-apps')
-    # Disable all chrome extensions entirely
-    #options.add_argument('--disable-extensions')
-    # Disable the GPU hardware acceleration
-    #options.add_argument('--disable-gpu')
-    # Disable syncing to a Google account
-    #options.add_argument('--disable-sync')
-    # Disable built-in Google Translate service
-    #options.add_argument('--disable-translate')
-    # Run in headless mode
-    #options.add_argument('--headless')
-    # Hide scrollbars on generated images/PDFs
-    #options.add_argument('--hide-scrollbars')
-    # Disable reporting to UMA, but allows for collection
-    #options.add_argument('--metrics-recording-only')
-    # Mute audio
-    #options.add_argument('--mute-audio')
-    # Skip first run wizards
-    #options.add_argument('--no-first-run')
-    # Expose port 9222 for remote debugging
-    #options.add_argument('--remote-debugging-port=9222')
-    # Disable fetching safebrowsing lists, likely redundant due to 
-    #   disable-background-networking
-    #options.add_argument('--safebrowsing-disable-auto-update')
-    #options.binary_location = os.environ['CHROME_BIN']
-    
-    #driver = webdriver.Chrome(chrome_options=options)
-    try:
-        #display = Display(visible=0, size=(1024, 768))
-        #display.start()
+    def get_session_cookies(self, email, password, fast=False,
+        remove_cookies=False):
         
-        #driver = webdriver.Firefox()
-        driver = webdriver.PhantomJS()
-        driver.get(login_url)
+        login_url = self.get_login_url(fast)
+        self.driver.get(login_url)
 
-        inputElement = driver.find_element_by_id('login_id')
+        WebDriverWait(self.driver, driver_timeout).until( \
+            EC.presence_of_element_located((By.ID, 'login_id')))
+        inputElement = self.driver.find_element_by_id('login_id')
         inputElement.send_keys(email)
-        inputElement = driver.find_element_by_id('password')
+        inputElement = self.driver.find_element_by_id('password')
         inputElement.send_keys(password)
 
-        login_button = driver.find_element_by_xpath( \
+        login_button = self.driver.find_element_by_xpath( \
             '//*[@id="loginbutton_script_on"]/span/input' )
         login_button.submit()
 
-        cookies = driver.get_cookies()
+        try:
+            WebDriverWait(self.driver, driver_timeout).until( \
+                lambda x: redirect_url in self.driver.current_url)
+            cookies = self.driver.get_cookies()
+            if remove_cookies:
+                self.driver.delete_all_cookies()
+            self.driver.get(blank_url)
 
-        driver.close()
-        driver.quit()
-        #display.close()
+            return cookies
+        except TimeoutException:
+            raise Exception('Error: Redirect not happening, ' \
+                'wrong DMM email or password?')
 
+    def get_session(self, email, password, fast=False):
+        cookies = self.get_session_cookies(email, password, fast)
         session = requests.Session()
         for cookie in cookies:
             session.cookies.set(cookie['name'], cookie['value'])
-        
-        valid_session = False
-        for cookie in session_cookies:
-            if cookie in session.cookies:
-                valid_session = True
-                break
-
-        if not valid_session:
-            raise Exception('Invalid session: wrong DMM email or password')
-
         return session
-    except Exception as e:
-        print(e)
 
-def get_books_list(soup):
-    books = []
+    def close_session():
+        self.driver.delete_all_cookies()
 
-    try:
-        book_list = soup.find('ul', {'class': \
-            'm-boxListBookProductLarge__list'})
+    def close_driver(self):
+        self.driver.quit()
 
-        book_divs = book_list.findChildren(attrs={'class': \
-            'm-boxListBookProductBlock__wrap'})
+    def get_books_list(self, soup):
+        books = []
 
-        for book_div in book_divs:
-            try:
-                book_link = book_div.findChild(attrs={'class': \
-                    'm-boxListBookProductBlock__item'}).findChild()['href']
-                title_div = book_div.findChild(attrs={'class': \
-                    'm-boxListBookProductBlock__main__info__ttl'})
-                book_details_url = title_div.findChild()['href']
-                title = title_div.findChild().contents[0]
+        try:
+            book_list = soup.find('ul', {'class': \
+                'm-boxListBookProductLarge__list'})
 
-                thumbnail = book_div.findChild(
-                    attrs={'class': 'm-boxListBookProductBlock__main__tmb'}
-                ).findChild('img')['src']
+            book_divs = book_list.findChildren(attrs={'class': \
+                'm-boxListBookProductBlock__wrap'})
 
-                url = book_url + book_link
-
-                books.append({
-                    'name': title,
-                    'url': url,
-                    'details_url': book_details_url,
-                    'thumbnail': thumbnail
-                })
-            except Exception as e:
-                pass # Book not purchased if book_link missing.
-    except Exception as e:
-        raise Exception('No book found.')
-
-    return books
-
-def get_purchased_books(session, max_attempts=5):
-    books = []
-    library_end = False
-    page = 1
-    error = False
-    attempt_num = 0
-
-    while not library_end:
-        while (not attempt_num) or (error and attempt_num < max_attempts):
-            response = requests.get(library_url,
-                params={'page': page},
-                cookies=session.cookies.get_dict()
-            )
-            if response.status_code == 200:
-                logger.info('Successfully requested page %d of purchased books',
-                    page)
+            for book_div in book_divs:
                 try:
-                    books.extend(get_books_list(
-                        BeautifulSoup(response.text, 'html.parser'))
-                    )
-                    page += 1
-                    error = False
-                    attempt_num = 0
-                except:
-                    logger.info('Purchased book library ended')
-                    library_end = True
-                    break
-            else:
-                logger.info('Failed to obtain response for page {} of ' \
-                    + 'purchased books, attempt {} out of {}'.format(
-                        page, attempt_num + 1, max_attempts
-                    )
-                )
-                error = True
-                attempt_num += 1
+                    book_link = book_div.findChild(attrs={'class': \
+                        'm-boxListBookProductBlock__item'}).findChild()['href']
+                    title_div = book_div.findChild(attrs={'class': \
+                        'm-boxListBookProductBlock__main__info__ttl'})
+                    book_details_url = title_div.findChild()['href']
+                    title = title_div.findChild().contents[0]
 
-    if error:
-        raise Exception('Unable to obtain all the purchased books')
-        
-    for book in books:
-        book['series'] = False
-        if 'series' in book['url']:
-            book['series'] = True
-    
-    return books
+                    thumbnail = book_div.findChild(
+                        attrs={'class': 'm-boxListBookProductBlock__main__tmb'}
+                    ).findChild('img')['src']
 
-def get_book_volumes(session, book, max_attempts=5):
-    volumes = []
-    if 'series' not in book:
-        volumes.append(dict(book))
-        del volumes[0]['series']
-    else:
-        last_page = False
+                    url = book_url + book_link
+
+                    books.append({
+                        'name': title,
+                        'url': url,
+                        'details_url': book_details_url,
+                        'thumbnail': thumbnail
+                    })
+                except Exception as e:
+                    pass # Book not purchased if book_link missing.
+        except Exception as e:
+            raise Exception('No book found.')
+
+        return books
+
+    def get_purchased_books(self, session, max_attempts=5):
+        books = []
+        library_end = False
         page = 1
         error = False
         attempt_num = 0
-        while not last_page:
+
+        while not library_end:
             while (not attempt_num) or (error and attempt_num < max_attempts):
-                response = requests.get(book['url'],
+                response = requests.get(library_url,
                     params={'page': page},
                     cookies=session.cookies.get_dict()
                 )
                 if response.status_code == 200:
-                    logger.info('Successfully requested page %d of volumes ' \
-                        + 'of series', page)
-                    soup = BeautifulSoup(response.text, 'html.parser')
+                    DMMRipper.logger.info('Successfully requested page %d ' \
+                        'of purchased books', page)
                     try:
-                        pagination = soup.find('ul', 
-                            {'class': 'm-boxPagenation__list'}
+                        books.extend(self.get_books_list(
+                            BeautifulSoup(response.text, 'html.parser'))
                         )
-                        last_soup_page = pagination.findChildren('li',
-                            {'class': 'm-boxPagenation__list__item'}
-                        )[-1]
-                        try:
-                            volumes.extend(get_books_list(soup))
-                        except Exception:
-                            raise Exception('Unable to obtain all the ' \
-                                + 'volumes in series')
-                        try:
-                            #if not last page it should contain a link.
-                            last_soup_page.findChild()['href']
-                            page += 1
-                            error = False
-                            attempt_num = 0
-                        except:
-                            last_page = True
-                            break
+                        page += 1
+                        error = False
+                        attempt_num = 0
                     except:
-                        logger.exception('Pagination system incompatible.')
+                        DMMRipper.logger.info('Purchased book library ended')
+                        library_end = True
+                        break
                 else:
-                    logger.info('Failed to obtain response for page {} of ' \
-                        + 'volumes of series, attempt {} out of {}'.format(
+                    DMMRipper.logger.info('Failed to obtain response for '
+                        + 'page {} of purchased books, attempt {} out of {}' \
+                        .format(
                             page, attempt_num + 1, max_attempts
                         )
                     )
@@ -247,67 +205,108 @@ def get_book_volumes(session, book, max_attempts=5):
                     attempt_num += 1
 
         if error:
-            raise Exception('Unable to obtain all the volumes in series')
+            raise Exception('Unable to obtain all the purchased books.')
+            
+        for book in books:
+            book['series'] = False
+            if 'series' in book['url']:
+                book['series'] = True
+        
+        return books
 
-    return list(reversed(volumes))
+    def get_book_volumes(self, session, book, max_attempts=5):
+        volumes = []
+        if 'series' not in book:
+            volumes.append(dict(book))
+            del volumes[0]['series']
+        else:
+            last_page = False
+            page = 1
+            error = False
+            attempt_num = 0
+            while not last_page:
+                while (error and attempt_num < max_attempts) \
+                    or (not attempt_num):
+                    
+                    response = requests.get(book['url'],
+                        params={'page': page},
+                        cookies=session.cookies.get_dict()
+                    )
+                    if response.status_code == 200:
+                        DMMRipper.logger.info('Successfully requested page ' \
+                            '%d of volumes of series', page)
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        try:
+                            pagination = soup.find('ul', 
+                                {'class': 'm-boxPagenation__list'}
+                            )
+                            last_soup_page = pagination.findChildren('li',
+                                {'class': 'm-boxPagenation__list__item'}
+                            )[-1]
+                            try:
+                                volumes.extend(self.get_books_list(soup))
+                            except Exception:
+                                raise Exception('Unable to obtain all the ' \
+                                    + 'volumes in series')
+                            try:
+                                #if not last page it should contain a link.
+                                last_soup_page.findChild()['href']
+                                page += 1
+                                error = False
+                                attempt_num = 0
+                            except:
+                                last_page = True
+                                break
+                        except:
+                            DMMRipper.logger.exception('Pagination system ' \
+                                + 'incompatible.')
+                    else:
+                        DMMRipper.logger.info('Failed to obtain response for ' \
+                            + 'page {} of volumes of series, attempt {} out ' \
+                            + 'of {}'.format(
+                                page, attempt_num + 1, max_attempts
+                            )
+                        )
+                        error = True
+                        attempt_num += 1
 
-def get_book_details(session, details_url):
-    details = None
-    try:
-        response = requests.get(details_url, cookies=session.cookies.get_dict())
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            description = soup.find(
-                'div', {'class': 'm-boxDetailProduct__info__story'}
-            ).contents[0].strip()
-            product_info = soup.find('div', {'class': 'm-boxDetailProductInfo'})
-            pages = re.match(
-                r'^([0-9]+)ページ', 
-                product_info.findChildren(
-                    'dd', {'class': 'm-boxDetailProductInfo__list__description'}
-                )[2].contents[0].strip()
-            ).group(1) 
-            details = {'description': description, 'pages': pages}
-    except Exception as e:
-        print(e)
-    return details
+            if error:
+                raise Exception('Unable to obtain all the volumes in series.')
 
-def get_book_vars(session, book):
-    response = requests.get(book.url, cookies=session.cookies.get_dict())
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
+        return list(reversed(volumes))
 
-        pattern = re.compile(r'\w+\ *= \"?(.*?)\"?;$', re.MULTILINE | re.DOTALL)
-        script = soup.find("script", text=pattern)
+    def get_book_details(self, session, details_url):
+        details = None
+        try:
+            response = requests.get(details_url, \
+                cookies=session.cookies.get_dict())
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                description = soup.find(
+                    'div', {'class': 'm-boxDetailProduct__info__story'}
+                ).contents[0].strip()
+                product_info = soup.find('div', \
+                    {'class': 'm-boxDetailProductInfo'})
+                pages = re.match(
+                    r'^([0-9]+)ページ', 
+                    product_info.findChildren(
+                        'dd', \
+                        {'class': 'm-boxDetailProductInfo__list__description'}
+                    )[2].contents[0].strip()
+                ).group(1) 
+                details = {'description': description, 'pages': pages}
+        except Exception as e:
+            print(e)
+        return details
 
-        book_var_values = []
-        var_ids_size = len(var_ids)
+    def download_book_page(self, book, page_num, path):
+        if self.browser_reader == None:
+            self.browser_reader = DMMBrowserReader(self.driver, book)
+        self.browser_reader.download_page(page_num, path)
 
-        for index, match in enumerate(pattern.findall(script.text)):
-            if index >= var_ids_size:
-                break
-            book_var_values.append(match.encode().decode('unicode-escape'))
-
-        return dict(zip(var_ids, book_var_values))
-    return None
-
-
-def get_page_download_url(book_vars, page):
-    url_template = '{}/{}/{}-{}.jpg?uid={}'
-    return url_template.format(book_vars[var_ids[0]], \
-        book_vars[var_ids[1]], book_vars[var_ids[1]], str(page).zfill(4), \
-        book_vars[var_ids[2]])
-
-def get_image_path(path, book_vars, page):
-    filename_template = '{}/{}-{}.jpg'
-    return filename_template.format(path, book_vars[var_ids[1]], page)
-
-def download_image(url, path):
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                f.write(chunk)
+    def close_broser_reader(self):
+        self.browser_reader.close()
+        self.browser_reader = None
 
 def download_book(session, book, path):
     response = requests.get(book['url'], cookies=session.cookies.get_dict())
@@ -329,17 +328,12 @@ def download_book(session, book, path):
 def main(argv):
     DMM_EMAIL = argv[0] 
     DMM_PASSWORD = argv[1]
-    
-    session = get_session(DMM_EMAIL, DMM_PASSWORD)
-    books = get_purchased_books(session)
-    print(books)
-    volumes = get_book_volumes(session, books[0])
-    print(volumes)
-    serie_title = books[0]['name']
-    for volume in volumes:
-        volume_path = 'temp/{}/{}'.format(serie_title, volume['name'])
-        utilities.create_dir(volume_path)
-        download_book(session, volume, volume_path)
+
+    dmm = DMMRipper.get_instance(True)
+    session = dmm.get_session(DMM_EMAIL, DMM_PASSWORD)
+    books = dmm.get_purchased_books(session)
+    volumes = dmm.get_book_volumes(session, books[0])
+    dmm.close_driver()
 
 if __name__ == '__main__':
     main(sys.argv[1:])

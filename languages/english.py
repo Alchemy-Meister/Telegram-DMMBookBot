@@ -13,7 +13,7 @@ en = {
 'invalid_email': 'Oops, that email doesn\'t look right. Please, send it again.',
 'email_changed': 'I have updated your DMM email.',
 'save_pass_confirm': 'Do you want DMMBookBot to store your password?',
-'credentials_enabled': 'OK, I have disabled the storage of your credentials.',
+'credentials_enabled': 'OK, I have enabled the storage of your credentials.',
 'credentials_disabled': 'OK, Credential storage has been disabled.',
 'password_removed': 'Your DMM Password has been removed.',
 'checking_credentials': 'I am validating your credentials, refrain from using your DMM account until I finish. Please wait, this may take some time...',

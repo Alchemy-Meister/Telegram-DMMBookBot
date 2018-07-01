@@ -107,7 +107,7 @@ class Database():
         return utils.dir_exists(Database.db_schema_name)
 
     def create_schema(self):
-        utils.create_dir(Database.db_schema_name.rsplit('/', 1))
+        utils.create_dir(Database.db_schema_name.rsplit('/', 1)[0])
         Base.metadata.create_all(self.engine)
 
     def create_session(self):

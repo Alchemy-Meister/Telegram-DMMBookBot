@@ -155,7 +155,7 @@ class BookDownloadHandler(ConversationHandler):
         password=None):
         
         if book.now_downloading:
-            self.scheduler.subcribe_to_book_download(
+            self.scheduler.subscribe_to_book_download(
                 book, user, bot, update, password=password
             )
         else:
