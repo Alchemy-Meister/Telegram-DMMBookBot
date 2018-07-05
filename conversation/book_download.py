@@ -73,6 +73,9 @@ class BookDownloadHandler(ConversationHandler):
             utils.create_dir(book_path)
         book_images = utils.get_book_page_num_list(book_path)
         missing_images = utils.book_missing_pages(1, book.pages, book_images)
+        is_toc_missing = not utils.dir_exists(path.join(book_path, 'toc.txt'))
+        self.logger.info('toc path: %s' % path.join(book_path, 'toc.txt'))
+        self.logger.info('is_toc_missing: %s' % is_toc_missing)
         self.logger.info('User %s requested to download book %s',
             user.id, book.id)
         self.logger.info('Removing download button of inline query of ' \
@@ -82,7 +85,7 @@ class BookDownloadHandler(ConversationHandler):
             inline_message_id = inline_message_id,
             reply_markup=None
         )
-        if not missing_images:
+        if not missing_images and not is_toc_missing:
             self.logger.info('All the book %s pages are available in local ' \
                 + 'storage', book.id)
             if user.file_format == FileFormat.pdf:
@@ -130,6 +133,7 @@ class BookDownloadHandler(ConversationHandler):
                 user_data['book'] = book
                 user_data['book_path'] = book_path
                 user_data['missing_images'] = missing_images
+                user_data['is_toc_missing'] = is_toc_missing
                 user_data['user'] = user
                 self.logger.info('sending user %s password request message.',
                     user.id)
@@ -139,19 +143,39 @@ class BookDownloadHandler(ConversationHandler):
                 return self.PROCESS_PASSWORD
             else:
                 self.download_pages(
-                    bot, update, book_path, missing_images, book, user
+                    bot,
+                    update,
+                    book_path,
+                    missing_images,
+                    is_toc_missing,
+                    book,
+                    user
                 )
                 return ConversationHandler.END
 
     def process_password(self, bot, update, user_data):
         password = update.message.text
-        self.download_pages(bot, update, user_data['book_path'], 
-            user_data['missing_images'], user_data['book'], user_data['user'],
+        self.download_pages(
+            bot,
+            update,
+            user_data['book_path'], 
+            user_data['missing_images'],
+            user_data['is_toc_missing'],
+            user_data['book'],
+            user_data['user'],
             password=password
         )
         return ConversationHandler.END
 
-    def download_pages(self, bot, update, book_path, missing_images, book, user,
+    def download_pages(
+        self,
+        bot,
+        update,
+        book_path,
+        missing_images,
+        is_toc_missing,
+        book,
+        user,
         password=None):
         
         if book.now_downloading:
@@ -160,7 +184,13 @@ class BookDownloadHandler(ConversationHandler):
             )
         else:
             self.scheduler.download_book_pages(
-                book_path, missing_images, book, user, bot, update, 
+                book_path,
+                missing_images,
+                is_toc_missing,
+                book,
+                user,
+                bot,
+                update,
                 password=password
             )
 

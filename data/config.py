@@ -3,6 +3,7 @@ class Config():
     SECRET_KEY = 'DB_PASS_ENCRYPTION_KEY'
     WEBDRIVER = {
         'GECKO_PATH': 'SELENIUM_GECKO_DRIVER_PATH',
+        'HEADLESS': True,
         'DEBUG_DRIVER': False,
         'FIREFOX_HEADER_SIZE': 74,
         'DRIVER_WINDOW_SIZE': [900, 1280]

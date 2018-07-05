@@ -12,6 +12,7 @@ from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
 import logging
+import signal
 import utilities as utils
 
 logging.basicConfig(
@@ -20,21 +21,26 @@ logging.basicConfig(
 logging.Formatter.converter = utils.logging_tz
 logger = logging.getLogger(__name__)
 
+lang = {'en': english.en, 'ja': japanese.ja, 'common': common.common}
+language_codes = {'en': ['english', '英語'], 'ja': ['japanese','日本語']}
+
+db_manager = Database.get_instance()
+scheduler = CronJobManager.get_instance(
+    languages=lang, max_upload_size=Config.MAX_UPLOAD_SIZE, \
+    webdriver_config=Config.WEBDRIVER
+)
+scheduler.set_download_path(Config.DOWNLOAD_PATH)
+
 def error_callback(bot, update, error):
     logger.exception(error)
 
+def shutdown():
+    scheduler.close_dmm_ripper()
+
 def main():
-    lang = {'en': english.en, 'ja': japanese.ja, 'common': common.common}
-    language_codes = {'en': ['english', '英語'], 'ja': ['japanese','日本語']}
-
-    db_manager = Database.get_instance()
-    scheduler = CronJobManager.get_instance(
-        languages=lang, max_upload_size=Config.MAX_UPLOAD_SIZE, \
-        webdriver_config=Config.WEBDRIVER
-    )
-    scheduler.set_download_path(Config.DOWNLOAD_PATH)
-
-    updater = Updater(Config.TOKEN)
+    updater = Updater(Config.TOKEN, \
+        request_kwargs={'read_timeout': 10, 'connect_timeout': 10},
+        user_sig_handler=signal.signal(signal.SIGTERM, shutdown))
     dispatcher = updater.dispatcher
 
     intro_wizard_handler = StartWizard(lang, language_codes, 0)
@@ -61,6 +67,8 @@ def main():
 
     updater.start_polling()
     updater.idle()
+
+    logger.info('is this blocked?')
 
 if __name__ == '__main__':
     main()

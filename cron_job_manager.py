@@ -138,7 +138,9 @@ class CronJobManager:
             )
             if not utils.dir_exists(thumbnail_path):
                 utils.create_dir(thumbnail_path.rsplit('/', 1)[0])
-                dmm.download_image(db_object.thumbnail_dmm, thumbnail_path)
+                CronJobManager.__instance.dmm_ripper.download_image(
+                    db_object.thumbnail_dmm, thumbnail_path
+                )
                 CronJobManager.logger.info('Storing thubnail in %s', 
                     thumbnail_path
                 )
@@ -327,14 +329,22 @@ class CronJobManager:
                 )   
 
 
-    def download_book_pages(self, book_path, missing_images, book, user,
-        bot, update, password=None):
+    def download_book_pages(self,
+        book_path,
+        missing_images,
+        is_toc_missing,
+        book,
+        user,
+        bot,
+        update,
+        password=None):
+
         self.subscribe_to_book_download(
             book, user, bot, update, password=password
         )
         self.scheduler.add_job(
             CronJobManager.__instance.download_book_pages_job,
-            args=[book_path, missing_images, book]
+            args=[book_path, missing_images, is_toc_missing, book]
         )
 
     @staticmethod
@@ -365,63 +375,105 @@ class CronJobManager:
                 )
         return dmm_cookies
 
+    def notify_subscribers_download_progress(
+        book,
+        current_page,
+        is_toc_missing,
+        start_toc_missing=True,
+        edit_message=False
+    ):
+        for subscriber in CronJobManager.book_job[book.id]['download']:
+            user = subscriber['user']
+            message_text = CronJobManager.lang[user.language_code] \
+                ['downloading'].format(utils.download_progress_bar(
+                    current_page,
+                    book.pages,
+                    is_toc_missing,
+                    start_toc_missing=start_toc_missing
+                )
+            )
+            if edit_message:
+                CronJobManager.logger.info(
+                    'Sending subscriber {} download progress '.format(user.id)
+                    + 'update message of volume {}.'.format(book.id)
+                )
+                try:
+                    subscriber['bot'].edit_message_text(
+                        message_text,
+                        chat_id = user.id,
+                        message_id=subscriber['message'].message_id,
+                        parse_mode=ParseMode.HTML
+                    )
+                except Exception as e:
+                    pass # Download percentage not modified
+            else:
+                CronJobManager.logger.info(
+                    'Sending subscriber {} download progress '.format(user.id)
+                    + 'message of volume {}.'.format(book.id)
+                )
+                subscriber['message'] = subscriber['bot'].send_message(
+                    chat_id = user.id,
+                    text = message_text,
+                    parse_mode=ParseMode.HTML
+                )
+
+
     @staticmethod
-    def download_book_pages_job(book_path, missing_images, book):
+    def download_book_pages_job(
+        book_path, missing_images, start_toc_missing, book
+    ):
+
         db_manager = Database.get_instance()
         db_session = db_manager.create_session()
         dmm_cookies = None
         CronJobManager.logger.info('Starting download job of book %s', book.id)
         db_manager.set_volume_now_downloading(db_session, book.id, True)
-        num_miss_imgs = len(missing_images)
-        for subscriber in CronJobManager.book_job[book.id]['download']:
-            user = subscriber['user']
-            subscriber['message'] = subscriber['bot'].send_message(
-                chat_id = user.id,
-                text = CronJobManager.lang[user.language_code]['downloading'] \
-                    .format(utils.download_progress_bar(
-                        book.pages - num_miss_imgs,
-                        book.pages
-                    )
-                ),
-                parse_mode=ParseMode.HTML
-            )
+        num_missing_images = len(missing_images)
+        CronJobManager.notify_subscribers_download_progress(
+            book,
+            book.pages - num_missing_images,
+            start_toc_missing,
+            start_toc_missing=start_toc_missing
+        )
+
         dmm_cookies = CronJobManager.get_dmm_cookies_for_book_download(book)
+        download_failed = False
 
         if dmm_cookies:
+            toc_path = path.join(book_path, 'toc.txt')
+            if start_toc_missing:
+                try:
+                    CronJobManager.__instance.dmm_ripper.download_book_toc( \
+                        book, toc_path)
+                    is_toc_missing = False
+                    CronJobManager.notify_subscribers_download_progress(
+                        book,
+                        book.pages - num_missing_images,
+                        is_toc_missing,
+                        edit_message=True
+                    )
+                except Exception as e:
+                    CronJobManager.logger.exception(e)
+                    CronJobManager.__instance.dmm_ripper.close_broser_reader()
+                    is_toc_missing = True
+            else:
+                is_toc_missing = False
             for index, page_num in enumerate(missing_images):
-                # CronJobManager.__instance.dmm_ripper.open_book_reader(book)
-                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
-                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(False)
-                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
-                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(True)
-                # CronJobManager.__instance.dmm_ripper.enable_reader_menu(False)
-                # CronJobManager.__instance.dmm_ripper.move_to_page(195)
-                # CronJobManager.__instance.dmm_ripper.save_screenshot()
-                # CronJobManager.__instance.dmm_ripper.move_to_page(10)
-                # CronJobManager.__instance.dmm_ripper.save_screenshot()
-                # CronJobManager.__instance.dmm_ripper.move_to_page(1)
-                # CronJobManager.__instance.dmm_ripper.move_to_page(195)
-                CronJobManager.__instance.dmm_ripper.download_book_page( \
-                    book, page_num, \
-                    path.join(book_path, '{}.jpg'.format(page_num))
+                try:
+                    CronJobManager.__instance.dmm_ripper.download_book_page( \
+                        book, page_num, \
+                        path.join(book_path, '{}'.format(page_num))
+                    )
+                except:
+                    CronJobManager.__instance.dmm_ripper.close_broser_reader()
+                    download_failed = True
+                CronJobManager.notify_subscribers_download_progress(
+                    book,
+                    book.pages - num_missing_images + index + 1,
+                    is_toc_missing,
+                    start_toc_missing=start_toc_missing,
+                    edit_message=True
                 )
-                for subscriber in CronJobManager.book_job[book.id]['download']:
-                    user = subscriber['user']
-                    try:
-                        subscriber['bot'].edit_message_text(
-                            CronJobManager.lang[user.language_code] \
-                            ['downloading'].format(
-                                utils.download_progress_bar(
-                                    book.pages - num_miss_imgs + index + 1,
-                                    book.pages
-                                )
-                            ),
-                            chat_id=user.id,
-                            message_id=subscriber['message'].message_id,
-                            parse_mode=ParseMode.HTML
-                        )
-                    except:
-                        pass # Download percentage not modified
             CronJobManager.__instance.dmm_ripper.close_broser_reader()
             CronJobManager.logger.info('Download of book %s has finished',
                 book.id)
@@ -438,7 +490,7 @@ class CronJobManager:
                     book, book_path, subscriber['user'], subscriber['bot'], \
                     from_download=True
                 )
-        else:
+        if not dmm_cookies or download_failed:
             CronJobManager.logger.info('Unable to start the download of ' \
                 + 'book %s', book.id)
             for subscriber in CronJobManager.book_job[book.id]:
@@ -572,3 +624,6 @@ class CronJobManager:
             CronJobManager.__instance.db_manager.remove_session()
 
         return CronJobManager.__instance 
+
+    def close_dmm_ripper(self):
+        self.dmm_ripper.close_driver()

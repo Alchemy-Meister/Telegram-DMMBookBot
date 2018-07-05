@@ -9,6 +9,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -32,10 +33,16 @@ class DMMRipper():
 
     def __init__(self, webdriver_config):
         if DMMRipper.__instance != None:
-            raise Exception("This class is a singleton!")
+            raise Exception('This class is a singleton!')
         else:
+            self.webdriver_config = webdriver_config
+            firefox_profile = FirefoxProfile()
+            firefox_profile.set_preference(
+                'browser.privatebrowsing.autostart', True
+            )
             options = Options()
-            options.set_headless(headless=not webdriver_config['DEBUG_DRIVER'])
+            options.set_headless(headless=webdriver_config['HEADLESS'])
+
             self.driver = webdriver.Firefox(firefox_options=options, \
                 executable_path = webdriver_config['GECKO_PATH'])
             self.driver.set_window_size( \
@@ -123,10 +130,11 @@ class DMMRipper():
             session.cookies.set(cookie['name'], cookie['value'])
         return session
 
-    def close_session():
+    def close_session(self):
         self.driver.delete_all_cookies()
 
     def close_driver(self):
+        DMMRipper.logger.info('Closing webdriver.')
         self.driver.quit()
 
     def get_books_list(self, soup):
@@ -299,14 +307,44 @@ class DMMRipper():
             print(e)
         return details
 
-    def download_book_page(self, book, page_num, path):
+    def download_image(self, url, path):
+     response = requests.get(url, stream=True)
+     if response.status_code == 200:
+         with open(path, 'wb') as f:
+             for chunk in response.iter_content(chunk_size=1024):
+                 f.write(chunk)
+
+    def download_book_toc(self, book, path):
         if self.browser_reader == None:
-            self.browser_reader = DMMBrowserReader(self.driver, book)
-        self.browser_reader.download_page(page_num, path)
+            self.browser_reader = DMMBrowserReader(
+                self.driver,
+                book,
+                self.webdriver_config
+            )
+        try:
+            self.browser_reader.download_table_of_contents(path)
+        except Exception as e:
+            DMMRipper.logger.exception(e)
+
+    def download_book_page(self, book, page_num, path, attempts=2):
+        if attempts <= 0:
+            raise Exception('Page downloads attemps exceeded.')
+        try:
+            if self.browser_reader == None:
+                self.browser_reader = DMMBrowserReader(
+                    self.driver,
+                    book,
+                    self.webdriver_config
+                )
+            self.browser_reader.download_page(page_num, path)
+        except Exception as e:
+            DMMRipper.logger.exception(e)
+            self.download_book_page(book, page_num, path, attempts=attempts - 1)
 
     def close_broser_reader(self):
-        self.browser_reader.close()
-        self.browser_reader = None
+        if self.browser_reader:
+            self.browser_reader.close()
+            self.browser_reader = None
 
 def download_book(session, book, path):
     response = requests.get(book['url'], cookies=session.cookies.get_dict())

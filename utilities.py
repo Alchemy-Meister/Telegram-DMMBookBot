@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*-coding:utf-8 -*-
 
+import fitz
 import img2pdf
 import logging
 import os
@@ -97,10 +98,19 @@ def get_book_download_path(base_path, book):
     else:
         return '{}/{}-{}'.format(base_path, book.title, book.id)
 
-def download_progress_bar(current_page, total_pages):
-    i = current_page / total_pages
+def download_progress_bar(
+    current_page, total_pages, is_toc_missing, start_toc_missing=True
+):
+    if start_toc_missing:
+        if is_toc_missing:
+            i = current_page / (total_pages + 1)
+        else:
+            i = (current_page + 1) / (total_pages + 1)
+    else:
+        i = current_page / total_pages
     j = 1 - i
-    return '[{}{}] {:d}%'.format('='*int(20*i), '　'*int(20*j), int(100*i))
+    logger.info('Percentage: %s' % int(100*i))
+    return '[{}{}] {:d}%'.format('='*int(15*i), '　'*int(15*j), int(100*i))
 
 def convert_book(user_format, path, book):
     return {
@@ -125,6 +135,7 @@ def convert_book2pdf(path, book):
     pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
     with open(pdf_path, 'wb') as f:
         f.write(img2pdf.convert(book_pages))
+    generate_toc(path, pdf_path)
     return pdf_path
 
 def convert_book2epub(path, book):
@@ -145,6 +156,20 @@ def convert_book2epub(path, book):
                 book.add_image_page(page.rsplit('/', 1)[1], file.read())
     book.save(epub_path)
     return epub_path
+
+def generate_toc(base_path, pdf_path):
+    toc_path = os.path.join(base_path, 'toc.txt')
+    if dir_exists(toc_path) and os.stat(toc_path).st_size != 0:
+        pdf_doc = fitz.open(pdf_path)
+        toc_list = []
+        with open(toc_path, 'r') as toc_file:
+            for toc_entry in toc_file:
+                title, page = toc_entry.split('\t', 1)
+                page = int(page.rstrip())
+                toc_list.append([1, title, page])
+        pdf_doc.setToC(toc_list)
+        pdf_doc.save(pdf_path, incremental=True)
+        pdf_doc.close()
 
 def get_book_by_format(path, format_name):
     for file in os.listdir(path):

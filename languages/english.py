@@ -46,7 +46,7 @@ en = {
 'conversion_and_send': 'I have finished the conversion! I\'m sending it now. Please wait.',
 'generate_url': 'As this file exceeds 50MB I can not send it directly from Telegram. I am requesting a download URL to a secure storage service.',
 'error_generate_url': 'I\'m sorry, I couldn\'t obatain a download URL from the secure storage service.',
-'url_send': 'URL has been obtained. It will available during 24 hours for a single download:\n\n{}\n\nIf the download request was done by mistake, you can force the removal the file.',
+'url_send': 'URL has been obtained. It will available during 24 hours for a single download:\n\n{}\n\nIf the download request was done by mistake, you can force the removal of the file.',
 'delete_url': 'Delete file now.',
 'url_removed': 'The file has been successfully deleted from the storage service.',
 'url_already_removed': 'You can rest assured, the file was already deleted.',

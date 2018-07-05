@@ -150,7 +150,7 @@ class Database():
         if not title.isspace():
             filters.append(Manga.title.like('%{}%'.format(title)))
         return session.query(Manga).join(User.book_collection) \
-            .filter(*filters).all()
+            .filter(*filters).order_by(Manga.title).all()
 
     def get_credentialed_users(self, session):
         return session.query(User).filter(User.password != None) \

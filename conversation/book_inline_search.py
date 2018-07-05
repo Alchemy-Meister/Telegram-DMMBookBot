@@ -14,7 +14,7 @@ import utilities as utils
 
 class BookSearchHandler(InlineQueryHandler):
 
-    series_regex = r'^series ([0-9]+):(.*)'
+    series_regex = r'^serie ([0-9]+):(.*)'
 
     def __init__(self, lang):
         self.lang = lang
@@ -44,7 +44,7 @@ class BookSearchHandler(InlineQueryHandler):
                     [
                         [InlineKeyboardButton(
                             self.lang[language_code]['search_volume'], 
-                            switch_inline_query_current_chat='series {}: ' \
+                            switch_inline_query_current_chat='serie {}: ' \
                                 .format(book.id)
                         )]
                     ]
