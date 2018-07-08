@@ -1,8 +1,10 @@
 #!/usr/bin/python
 # -*-coding:utf-8 -*-
 
+import cv2
 import fitz
 import img2pdf
+import locale
 import logging
 import os
 import string
@@ -17,11 +19,13 @@ from epub_converter import Book
 from io import BytesIO
 from PIL import Image
 from pytz import timezone, utc
+from tesserocr import PyTessBaseAPI, RIL
 
 logger = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CWD = os.getcwd()
+locale.setlocale(locale.LC_ALL, "C")
 
 def random_string(length):
     return ''.join(random.SystemRandom().choice( \
@@ -109,7 +113,6 @@ def download_progress_bar(
     else:
         i = current_page / total_pages
     j = 1 - i
-    logger.info('Percentage: %s' % int(100*i))
     return '[{}{}] {:d}%'.format('='*int(15*i), '　'*int(15*j), int(100*i))
 
 def convert_book(user_format, path, book):
@@ -135,7 +138,7 @@ def convert_book2pdf(path, book):
     pdf_path = os.path.join(path, '{}.pdf'.format(book.title))
     with open(pdf_path, 'wb') as f:
         f.write(img2pdf.convert(book_pages))
-    generate_toc(path, pdf_path)
+    generate_pdf_toc(path, pdf_path)
     return pdf_path
 
 def convert_book2epub(path, book):
@@ -157,7 +160,7 @@ def convert_book2epub(path, book):
     book.save(epub_path)
     return epub_path
 
-def generate_toc(base_path, pdf_path):
+def generate_pdf_toc(base_path, pdf_path):
     toc_path = os.path.join(base_path, 'toc.txt')
     if dir_exists(toc_path) and os.stat(toc_path).st_size != 0:
         pdf_doc = fitz.open(pdf_path)
@@ -170,6 +173,22 @@ def generate_toc(base_path, pdf_path):
         pdf_doc.setToC(toc_list)
         pdf_doc.save(pdf_path, incremental=True)
         pdf_doc.close()
+
+def get_component_images(path):
+
+    image = Image.open(path)
+    with PyTessBaseAPI(lang='jpn') as api:
+        api.SetImage(image)
+        print(api.GetUTF8Text())
+        boxes = api.GetComponentImages(RIL.TEXTLINE, True)
+        print('Found {} textline image components.'.format(len(boxes)))
+        for i, (im, box, _, _) in enumerate(boxes):
+            # im is a PIL image object
+            # box is a dict with x, y, w and h keys
+            api.SetRectangle(box['x'], box['y'], box['w'], box['h'])
+            ocrResult = api.GetUTF8Text()
+            conf = api.MeanTextConf()
+            print((u"Box[{0}]: x={x}, y={y}, w={w}, h={h}, confidence: {1}, text: {2}").format(i, conf, ocrResult, **box))
 
 def get_book_by_format(path, format_name):
     for file in os.listdir(path):

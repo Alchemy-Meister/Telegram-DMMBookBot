@@ -11,8 +11,10 @@ from data.config import Config
 from cron_job_manager import CronJobManager
 from db_utils import Database
 from languages import common, english, japanese
+
 import logging
 import signal
+import sys
 import utilities as utils
 
 logging.basicConfig(
@@ -39,8 +41,7 @@ def shutdown():
 
 def main():
     updater = Updater(Config.TOKEN, \
-        request_kwargs={'read_timeout': 10, 'connect_timeout': 10},
-        user_sig_handler=signal.signal(signal.SIGTERM, shutdown))
+        request_kwargs={'read_timeout': 10, 'connect_timeout': 10})
     dispatcher = updater.dispatcher
 
     intro_wizard_handler = StartWizard(lang, language_codes, 0)
@@ -68,7 +69,8 @@ def main():
     updater.start_polling()
     updater.idle()
 
-    logger.info('is this blocked?')
+    shutdown()
+    sys.exit(0)
 
 if __name__ == '__main__':
     main()

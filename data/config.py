@@ -9,6 +9,6 @@ class Config():
         'DRIVER_WINDOW_SIZE': [900, 1280]
     }
     DATABASE = 'dmm.db'
-    DOWNLOAD_PATH = 'books/images'
+    DOWNLOAD_PATH = 'books'
     LANGUAGE = {'ja': '日本語', 'en': 'English'}
     MAX_UPLOAD_SIZE = 50 * 1024 * 1024 #bytes

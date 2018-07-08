@@ -31,7 +31,7 @@ class DMMRipper():
     logger = logging.getLogger(__name__)
     __instance = None
 
-    def __init__(self, webdriver_config):
+    def __init__(self, webdriver_config=None):
         if DMMRipper.__instance != None:
             raise Exception('This class is a singleton!')
         else:
@@ -327,50 +327,41 @@ class DMMRipper():
             DMMRipper.logger.exception(e)
 
     def download_book_page(self, book, page_num, path, attempts=2):
-        if attempts <= 0:
-            raise Exception('Page downloads attemps exceeded.')
-        try:
+        download_success = False
+        while attempts > 0 and not download_success:
             if self.browser_reader == None:
                 self.browser_reader = DMMBrowserReader(
-                    self.driver,
-                    book,
-                    self.webdriver_config
+                    self.driver, book, self.webdriver_config
                 )
-            self.browser_reader.download_page(page_num, path)
-        except Exception as e:
-            DMMRipper.logger.exception(e)
-            self.download_book_page(book, page_num, path, attempts=attempts - 1)
+            try:
+                self.browser_reader.download_page(page_num, path)
+                download_success = True
+            except Exception as e:
+                DMMRipper.logger.exception(e)
+                attempts = attempts - 1
+        if not download_success:
+            raise Exception('Page downloads attemps exceeded.')
 
     def close_broser_reader(self):
         if self.browser_reader:
             self.browser_reader.close()
             self.browser_reader = None
 
-def download_book(session, book, path):
-    response = requests.get(book['url'], cookies=session.cookies.get_dict())
-    if response.status_code == 200:
-        book_vars = get_book_vars(response.text)
-        num_pages = book_vars[var_ids[5]]
-        for page in range(1, int(num_pages) + 1):
-            page_url = get_page_download_url(book_vars, page)
-
-            response = requests.get(page_url, stream=True)
-            if response.status_code == 200:
-                with open(get_image_path(path, book_vars, page), \
-                    'wb') as f:
-                    
-                    for chunk in response.iter_content(1024):
-                        if chunk:
-                            f.write(chunk)
-
 def main(argv):
     DMM_EMAIL = argv[0] 
     DMM_PASSWORD = argv[1]
 
-    dmm = DMMRipper.get_instance(True)
+    from data.config import Config
+    dmm = DMMRipper.get_instance(Config['WEBDRIVER'])
     session = dmm.get_session(DMM_EMAIL, DMM_PASSWORD)
     books = dmm.get_purchased_books(session)
-    volumes = dmm.get_book_volumes(session, books[0])
+    for book in books:
+        volumes = dmm.get_book_volumes(session, book)
+        for volume in volumes:
+            volume_details = dmm.get_book_details(
+                session, volume['details_url']
+            )
+
     dmm.close_driver()
 
 if __name__ == '__main__':

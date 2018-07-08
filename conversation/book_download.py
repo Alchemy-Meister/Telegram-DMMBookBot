@@ -74,8 +74,6 @@ class BookDownloadHandler(ConversationHandler):
         book_images = utils.get_book_page_num_list(book_path)
         missing_images = utils.book_missing_pages(1, book.pages, book_images)
         is_toc_missing = not utils.dir_exists(path.join(book_path, 'toc.txt'))
-        self.logger.info('toc path: %s' % path.join(book_path, 'toc.txt'))
-        self.logger.info('is_toc_missing: %s' % is_toc_missing)
         self.logger.info('User %s requested to download book %s',
             user.id, book.id)
         self.logger.info('Removing download button of inline query of ' \

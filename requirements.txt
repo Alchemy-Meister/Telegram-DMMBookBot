@@ -5,6 +5,7 @@ cryptography
 img2pdf
 lxml
 python-telegram-bot
+PyMuPDF
 requests
 selenium
 sendclient
